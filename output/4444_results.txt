@@ -1,0 +1,17 @@
+    Finished `release` profile [optimized] target(s) in 0.02s
+     Running `target/release/rust_k_perimeter 4444`
+MV: ( 5, -37 )
+MV: ( 5, -37 )
+# Good points: 965
+# bad  points: 6082
+sqrt_k      : 68
+max_edge_l  : 17
+max angle   : 0.3041202374578488
+k: 4444
+Polygon saved to output/4444.pdf
+Perimeter        : 235.0975522798071
+circle perimeter : 235.27413698170432
+Naive perimeter  : 236.31536346630568
+Max angle of sol : 0.24497866312686423
+Longest edge len : 13 
+Running time in seconds: 1354
