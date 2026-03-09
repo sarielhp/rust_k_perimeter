@@ -1,7 +1,13 @@
 # Smallest k-Perimeter Polygon
 
+Joint work Elfarouk Harb.
+
 ## rust_k_perimeter
-Rust code to compute the minimum perimeter polygon containing k points.
+Rust code to compute the minimum perimeter grid polygon (i.e., polygon
+whose vertices are integral points) containing k points. It is not
+hard to come up with O(k^3) running time, but this solution does
+slightly better, by aggressively restricting the configurations being
+inspected
 
 This project provides a Julia based algorithmic solver to find the
 smallest perimeter polygon with vertices on the integer grid that
