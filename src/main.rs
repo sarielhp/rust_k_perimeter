@@ -9,9 +9,11 @@ use geom::{
     CoordType, Point2D,
 };
 use std::env;
+use std::fs::File;
 use std::time::Instant;
+use std::io::Write;
 
-fn main() {
+fn main( ) -> std::io::Result<()> {
     let start = Instant::now();
     let args: Vec<String> = env::args().collect();
     if args.len() < 2 {
@@ -46,16 +48,28 @@ fn main() {
 
     good.fill_dist_to_origin( &bad_ch );
     
+    let filename_log: String = format!("output/{}_summmary.txt", k);
+    let mut log = File::create( filename_log )?;
+
 
     println!("# Good points: {}", good.length());
     println!("# bad  points: {}", bad.length());
+    writeln!( log, "# Good points: {}", good.length())?;
+    writeln!( log, "# bad  points: {}", bad.length())?;
 
     let (sol, ub_circle) = minimize_perimeter_dp(k as u32, &good, &bad, &bad_ch);
 
+    writeln!( log, "k: {}", k)?;
     println!("k: {}", k);
+
+
     let perimeter = compute_perimeter(&sol);
     draw_polygon_with_grid(&sol, &ch_m, &ch_m_exp, k, ub_circle, &bad, &good);
     let ch_m_perimeter = compute_perimeter(&ch_m);
+    writeln!( log, "Perimeter        : {}", perimeter)?;
+    writeln!( log, "circle perimeter : {}", ch_m_perimeter)?;
+    writeln!( log, "Naive perimeter  : {}", ub_circle)?;
+)
     println!("Perimeter        : {}", perimeter);
     println!("circle perimeter : {}", ch_m_perimeter);
     println!("Naive perimeter  : {}", ub_circle);
@@ -69,8 +83,15 @@ fn main() {
         perimeter <= ub_circle * 1.00001,
         "perimeter not computed correctly B"
     );
+    writeln!( log, "Max angle of sol : {}", c_max_angle)?;
+    writeln!( log, "Longest edge len : {}", len_longest_edge(&sol))?;
+        
     println!("Max angle of sol : {}", c_max_angle);
-    println!("Longest edge len : {} ", len_longest_edge(&sol));
+    println!("Longest edge len : {}", len_longest_edge(&sol));
     let duration = start.elapsed();
-    println!("Running time in seconds: {}", duration.as_secs())
+
+    writeln!( log, "Running time in seconds: {}", duration.as_secs() )?;        
+    println!("Running time in seconds: {}", duration.as_secs());
+
+    Ok(())
 }

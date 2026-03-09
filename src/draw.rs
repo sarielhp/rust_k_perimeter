@@ -39,16 +39,6 @@ fn draw_polygon(cr: &Context, poly: &[(f64, f64)], rgba: (f64, f64, f64, f64)) {
     cr.fill().unwrap();
 }
 
-pub fn compute_perimeter(sol: &[Point2D]) -> f64 {
-    if sol.is_empty() {
-        return 0.0;
-    }
-    let mut l = (sol.first().unwrap().clone() - sol.last().unwrap().clone()).norm();
-    for i in 1..sol.len() {
-        l += (sol[i - 1] - sol[i]).norm();
-    }
-    l
-}
 
 pub fn draw_polygon_with_grid(
     poly: &[Point2D],
@@ -60,7 +50,7 @@ pub fn draw_polygon_with_grid(
     good: &GridSet,
 ) {
     std::fs::create_dir_all("output").unwrap_or_default();
-    let filename = format!("output/{}.pdf", k);
+    let filename: String = format!("output/{}.pdf", k);
 
     let (min_x, max_x, min_y, max_y) = bound(&[poly, poly_circ, poly_circ_exp], 1);
 
