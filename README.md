@@ -1,19 +1,27 @@
-<<<<<<< HEAD
 # Smallest k-Perimeter Polygon
 
-This project provides a Julia based algorithmic solver to find the smallest perimeter polygon with vertices on the integer grid that encapsulates exactly $k$ grid points, subject to the condition that it strictly encloses a set of "good" points and strictly excludes a set of "bad" points.
+## rust_k_perimeter
+Rust code to compute the minimum perimeter polygon containing k points.
+
+This project provides a Julia based algorithmic solver to find the
+smallest perimeter polygon with vertices on the integer grid that
+encapsulates exactly $k$ grid points, subject to the condition that it
+strictly encloses a set of "good" points and strictly excludes a set
+of "bad" points.
 
 ## Project Structure
 
-- `src/k_perimeter.jl`: Contains the core algorithmic logic and geometric functions.
-- `bench2.jl`: A benchmarking script to test the computation time for various values of $k$.
+- `src/*`: Contains the core algorithmic logic and geometric functions.
 - `output/`: (Created upon running) Holds the PDF visualizations of the generated polygons.
 
 ## Core Algorithm
 
 The algorithm leverages an **Even-Odd Dynamic Programming (DP)** approach:
+
 1. First, an estimated bounding shape (`ch_m`) is created based on a disk of radius determined by $k$, to separate necessary "good" internal points and "bad" external points.
+
 2. We then traverse the state space searching for a sequence of coordinate choices `(loc_prev, loc, n_g)` where `n_g` is the accumulated number of enclosed grid points, optimizing for minimal boundary length (`perimeter_so_far`).
+
 3. State transitions (`comp_next_conf`) check for valid polygon properties: counter-clockwise (left) turns, strictly enclosing valid grid points, keeping the angle within a specific bound, and honoring point sets `good` and `bad`.
 
 ## Usage Instructions
@@ -22,22 +30,28 @@ To run the solver and generate a PDF output for a given $k$:
 
 ```bash
 # Example for k = 10
-julia --project src/k_perimeter.jl 10
+cargo run --release -- 44
 ```
 
-This will run the full computation, output the theoretical circle bounds, and the exact coordinates of the generated polygon. It will then generate a PDF visualization of the resulting optimal polygon inside `output/10.pdf`.
-
-To run benchmarks:
-```bash
-julia --project bench2.jl
-```
+This will run the full computation, output the theoretical circle
+bounds, and the exact coordinates of the generated polygon. It will
+then generate a PDF visualization of the resulting optimal polygon
+inside `output/44.pdf`.
 
 ## Requirements
-- Julia 1.x
-- `DataStructures.jl`
-- `Cairo.jl` (For PDF visualizations)
-- `Printf` and `LinearAlgebra` (Part of standard library)
-=======
-# rust_k_perimeter
-Rust code to compute the minimum perimeter polygon containing k points.
->>>>>>> 4b82a31cc4b041263549f0b91722430ce38df701
+- Rust
+
+## Disclaimer
+
+The program was originally written in Julia and then translated into
+rust using (google) antigravity, and then a lot of fine tuning. 
+
+## Hacks
+
+Making the CoordType to be i16 reduced memory usage and enabled
+running this program on larger inputs (currently k=2222, but bigger
+inputs might be possible). Note, that approximate solutions for this
+problem are easy to find, so this is useful only for exact algorithm
+fanatics, or people interested in the dynamic programming solution
+(which is admittedly quite interesting here).
+
