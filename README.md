@@ -1,6 +1,6 @@
 # Smallest k-Perimeter Polygon
 
-Joint work Elfarouk Harb.
+Joint work with Elfarouk Harb.
 
 ## rust_k_perimeter
 Rust code to compute the minimum perimeter grid polygon (i.e., polygon
