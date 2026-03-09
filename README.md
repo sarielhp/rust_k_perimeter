@@ -3,6 +3,7 @@
 Joint work with Elfarouk Harb.
 
 ## rust_k_perimeter
+
 Rust code to compute the minimum perimeter grid polygon (i.e., polygon
 whose vertices are integral points) containing k points. It is not
 hard to come up with O(k^3) running time, but this solution does
