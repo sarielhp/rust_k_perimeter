@@ -1,0 +1,14 @@
+[package]
+name = "rust_k_perimeter"
+version = "0.1.0"
+edition = "2021"
+
+[profile.release]
+opt-level = 3          # Maximize optimizations (default for release)
+lto = "fat"            # Enable Link Time Optimization (huge for performance)
+codegen-units = 1      # Reduces parallel compilation to allow more global optimizations
+panic = "abort"        # Removes stack unwinding code; smaller and faster, but no backtraces on panic
+
+[dependencies]
+cairo-rs = { version = "0.20", features = ["pdf", "svg", "ps"] }
+rustc-hash = "2.1.1"

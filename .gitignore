@@ -1,0 +1,13 @@
+# Added by Cargo
+# -----------------------------------------------------------------------
+/target/
+
+# Remove this if you are building a library (keep Cargo.lock for binaries)
+# Cargo.lock
+
+# JetBrains IDEs (if you occasionally use them)
+.idea/
+*.iml
+
+# Visual Studio Code (useful if using the GitHub Copilot extension)
+.vscode/

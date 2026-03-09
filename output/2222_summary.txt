@@ -1,0 +1,19 @@
+
+sariel@red ~/prog/26/rust_k_perimeter ❯❯❯ cargo run --release -- 2222
+    Finished `release` profile [optimized] target(s) in 0.02s
+     Running `target/release/rust_k_perimeter 2222`
+MV: ( 4, -26 )
+MV: ( 5, -26 )
+# Good points: 995
+# bad  points: 3025
+sqrt_k      : 49
+max_edge_l  : 14
+max angle   : 0.383167488872171
+k: 2222
+Polygon saved to output/2222.pdf
+Perimeter        : 165.78220549599968
+circle perimeter : 165.78675924776965
+Naive perimeter  : 167.10019600558846
+Max angle of sol : 0.3217505543966423
+Longest edge len : 11
+Running time in seconds: 1367
