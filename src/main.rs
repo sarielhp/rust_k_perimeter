@@ -69,7 +69,6 @@ fn main( ) -> std::io::Result<()> {
     writeln!( log, "Perimeter        : {}", perimeter)?;
     writeln!( log, "circle perimeter : {}", ch_m_perimeter)?;
     writeln!( log, "Naive perimeter  : {}", ub_circle)?;
-)
     println!("Perimeter        : {}", perimeter);
     println!("circle perimeter : {}", ch_m_perimeter);
     println!("Naive perimeter  : {}", ub_circle);

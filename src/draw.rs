@@ -38,7 +38,9 @@ fn draw_polygon(cr: &Context, poly: &[(f64, f64)], rgba: (f64, f64, f64, f64)) {
     cr.set_source_rgba(rgba.0, rgba.1, rgba.2, rgba.3);
     cr.fill().unwrap();
 }
-
+pub fn compute_perimeter(poly: &[Point2D]) -> f64 {
+    crate::geom::euclidean_length(poly)
+}
 
 pub fn draw_polygon_with_grid(
     poly: &[Point2D],
