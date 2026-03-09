@@ -1,4 +1,4 @@
-use std::ops::{Add, Div, Mul, Sub};
+use std::{cmp::{max, min}, ops::{Add, Div, Mul, Sub}};
 
 pub type CoordType = i16;
 
@@ -103,6 +103,10 @@ pub fn is_lefteq_turn(a: Point2D, b: Point2D, c: Point2D) -> bool {
     (b.x - a.x) * (c.y - a.y) >= (b.y - a.y) * (c.x - a.x)
 }
 
+pub fn d_y( a:Point2D, b:Point2D ) -> f64 {
+    (a-b).norm()
+}
+
 pub fn is_left_turn(a: Point2D, b: Point2D, c: Point2D) -> bool {
     (b.x - a.x) * (c.y - a.y) > (b.y - a.y) * (c.x - a.x)
 }
@@ -130,6 +134,19 @@ pub fn distance_to_segment(p: Point2D, a: Point2D, b: Point2D) -> f64 {
     let closest_point = a_f + ab_f * t_clamped;
     (p_f - closest_point).norm()
 }
+
+pub fn euclidean_length(sol: &[Point2D]) -> f64 {
+    if sol.is_empty() {
+        return 0.0;
+    }
+    let mut l = (sol.first().unwrap().clone() - sol.last().unwrap().clone()).norm();
+    for i in 1..sol.len() {
+        l += (sol[i - 1] - sol[i]).norm();
+    }
+    l
+}
+
+
 
 pub fn polygon_boundary_distance(poly: &[Point2D], query_point: Point2D) -> f64 {
     let n = poly.len();
@@ -576,6 +593,7 @@ pub struct GridSet {
     pub max_y: CoordType,
     width: usize,
     data: Vec<bool>,
+    dto: Vec<f64>, // Distance to origin
 }
 
 impl GridSet {
@@ -589,6 +607,7 @@ impl GridSet {
             max_y,
             width,
             data: vec![false; width * height],
+            dto: vec![-1.0; width * height],
         }
     }
 
@@ -605,6 +624,23 @@ impl GridSet {
         }
     }
 
+    pub fn insert_val(&mut self, p: Point2D, val: f64) {
+        if p.x >= self.min_x && p.x <= self.max_x && p.y >= self.min_y && p.y <= self.max_y {
+            let idx = (p.y - self.min_y) as usize * self.width + (p.x - self.min_x) as usize;
+            self.dto[idx] = val;
+        }
+    }
+
+    #[allow(dead_code)]
+    pub fn get_dto(&self, p: Point2D ) -> f64 {
+        if p.x >= self.min_x && p.x <= self.max_x && p.y >= self.min_y && p.y <= self.max_y {
+            let idx = (p.y - self.min_y) as usize * self.width + (p.x - self.min_x) as usize;
+            self.dto[idx]
+        } else {
+            self.min_x as f64 * self.min_x as f64
+        }
+    }
+
     pub fn contains(&self, p: &Point2D) -> bool {
         if p.x >= self.min_x && p.x <= self.max_x && p.y >= self.min_y && p.y <= self.max_y {
             let idx = (p.y - self.min_y) as usize * self.width + (p.x - self.min_x) as usize;
@@ -613,6 +649,93 @@ impl GridSet {
             false
         }
     }
+
+    pub fn fill_dist_to_origin(&mut self, bad_ch: &Vec<Point2D>) {
+        for y in self.min_y..=self.max_y {
+            if y < 0 {
+                continue;
+            }
+            for x in self.min_x..=self.max_x {
+                let p = Point2D::new(x, y);
+                if !self.contains( &p ) {
+                    continue;
+                }
+                let l = distance_to_origin(bad_ch, p);
+                self.insert_val(p, l);
+            }
+        }
+    }
+}
+
+/// Determines the orientation of ordered triplet (p, q, r).
+/// Returns:
+///  0 -> p, q and r are collinear
+///  1 -> Clockwise
+///  2 -> Counterclockwise
+fn orientation(p: Point2D, q: Point2D, r: Point2D) -> i32 {
+    let val =  (q.y as i64 - p.y as i64) * (r.x as i64 - q.x as i64)
+        - (q.x as i64 - p.x as i64) * (r.y as i64 - q.y as i64) ;
+    if val == 0 {
+        return 0;
+    }
+    if val > 0 {
+        1
+    } else {
+        2
+    }
+}
+
+/// Checks if point 'q' lies on line segment 'pr'
+fn on_segment(p: Point2D, q: Point2D, r: Point2D) -> bool {
+    q.x <= p.x.max(r.x) && q.x >= p.x.min(r.x) && q.y <= p.y.max(r.y) && q.y >= p.y.min(r.y)
+}
+
+/// Returns true if segment p1q1 and p2q2 intersect.
+fn segments_intersect(p1: Point2D, q1: Point2D, p2: Point2D, q2: Point2D) -> bool {
+    let o1 = orientation(p1, q1, p2);
+    let o2 = orientation(p1, q1, q2);
+    let o3 = orientation(p2, q2, p1);
+    let o4 = orientation(p2, q2, q1);
+
+    // General case: segments straddle each other
+    if o1 != o2 && o3 != o4 {
+        return true;
+    }
+
+    // Special Cases: Collinear points
+    if o1 == 0 && on_segment(p1, p2, q1) {
+        return true;
+    }
+    if o2 == 0 && on_segment(p1, q2, q1) {
+        return true;
+    }
+    if o3 == 0 && on_segment(p2, p1, q2) {
+        return true;
+    }
+    if o4 == 0 && on_segment(p2, q1, q2) {
+        return true;
+    }
+
+    false
+}
+
+/// Main function: Checks if segment (s1, s2) intersects the polygon boundary
+pub fn does_segment_intersect_polygon(polygon: &[Point2D], s1: Point2D, s2: Point2D) -> bool {
+    let n = polygon.len();
+    if n < 3 {
+        return false;
+    }
+
+    for i in 0..n {
+        let v1 = polygon[i];
+        let v2 = polygon[(i + 1) % n]; // Wraps around to close the polygon
+
+        if segments_intersect(s1, s2, v1, v2) {
+            return true;
+        }
+    }
+
+    false
 }
 
 pub fn is_all_left_turns(p: Point2D, p_next: Point2D, v: &[Point2D]) -> bool {
@@ -639,6 +762,42 @@ pub fn is_all_left_turns(p: Point2D, p_next: Point2D, v: &[Point2D]) -> bool {
 
     true
 }
+
+pub fn distance_to_origin(bad_ch : &[Point2D], p : Point2D) -> f64 {
+    let origin = Point2D{ x: 0, y: 0 };
+    if ! does_segment_intersect_polygon( bad_ch, origin, p ) {
+        return  d_y( origin, p );
+    }
+    let mut pnts = bad_ch.to_vec();
+    pnts.push( origin );
+    pnts.push( p );
+    let poly = convex_hull( &pnts );
+
+    let n = poly.len();
+    assert!( n > 2 );
+    assert!( is_left_turn( poly[0], poly[1], poly[2] ) );
+
+    // This will return the index or panic with the message provided
+    let i_o = poly.iter().position(|&x| x == origin)
+        .expect("Origin not found in CH!");
+    let i_p = poly.iter().position(|&x| x == p)
+        .expect("p not found in CH!");
+
+    let s = min( i_o, i_p );
+    let t = max( i_o, i_p );
+    assert!( s < t );
+    let mut t_l = 0.0;
+    for k in s..t  {
+        t_l += d_y( poly[ k ], poly[ k + 1 ] );
+    }
+    if  i_p < i_o {
+        return t_l;
+    }
+
+    let total_l = euclidean_length( &poly );
+    total_l - t_l
+}
+
 
 pub fn compute_good_bad_sets(ch_m: &[Point2D], l: f64) -> (GridSet, GridSet, Vec<Point2D>) {
     let (min_x, max_x, min_y, max_y) = bound(&[ch_m], (l + 3.0).ceil() as i32);

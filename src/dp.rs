@@ -168,7 +168,7 @@ impl Ord for QueueItem {
 
 pub fn minimize_perimeter_dp(
     k: u32,
-    _good: &GridSet,
+    good: &GridSet,
     bad: &GridSet,
     bad_in_ch: &Vec<Point2D>,
 ) -> (Vec<Point2D>, f64) {
@@ -247,6 +247,12 @@ pub fn minimize_perimeter_dp(
                 continue;
             }
 
+            // let total_perim = new_perim + good.dto( next_cfg.loc.norm();
+            let total_perim = new_perim + good.get_dto( next_cfg.loc );
+            if total_perim > opt_perim {
+                //println!("Shakshoka!");
+                continue;
+            }
             if !is_store(&d_all, &next_cfg, new_perim, opt_perim, k) {
                 continue;
             }
@@ -266,7 +272,6 @@ pub fn minimize_perimeter_dp(
             });
 
             if next_cfg.n_g == k {
-                let total_perim = new_perim + next_cfg.loc.norm();
                 if total_perim < opt_perim {
                     opt_perim = total_perim;
                     best_sol = next_cfg;

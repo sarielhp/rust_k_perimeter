@@ -37,10 +37,15 @@ fn main() {
     let ch_m = vtrans(&ch_z, Point2D::new(-delta as CoordType, 0));
     let ch_m_exp = vtrans(&ch_z_exp, Point2D::new(-delta as CoordType, 0));
 
-    let l_f = ((k as f64).powf(0.25) / 3.0).round() as i64;
-    let l = if l_f > 3 { l_f } else { 3 };
+    //let l_f = ((k as f64).powf(0.25) / 3.0).round() as i64;
+    //let l = if l_f > 3 { l_f } else { 3 };
+    let l_f = ((k as f64).powf(0.25) / 4.0).round() as i64;
+    let l = if l_f > 2 { l_f } else { 2 };
 
-    let (good, bad, bad_ch) = compute_good_bad_sets(&ch_m_exp, l as f64);
+    let (mut good, bad, bad_ch) = compute_good_bad_sets(&ch_m_exp, l as f64);
+
+    good.fill_dist_to_origin( &bad_ch );
+    
 
     println!("# Good points: {}", good.length());
     println!("# bad  points: {}", bad.length());
