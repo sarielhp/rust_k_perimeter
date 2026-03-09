@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 # Smallest k-Perimeter Polygon
 
 This project provides a Julia based algorithmic solver to find the smallest perimeter polygon with vertices on the integer grid that encapsulates exactly $k$ grid points, subject to the condition that it strictly encloses a set of "good" points and strictly excludes a set of "bad" points.
@@ -36,3 +37,7 @@ julia --project bench2.jl
 - `DataStructures.jl`
 - `Cairo.jl` (For PDF visualizations)
 - `Printf` and `LinearAlgebra` (Part of standard library)
+=======
+# rust_k_perimeter
+Rust code to compute the minimum perimeter polygon containing k points.
+>>>>>>> 4b82a31cc4b041263549f0b91722430ce38df701
