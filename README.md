@@ -55,10 +55,24 @@ rust using (google) antigravity, and then a lot of fine tuning.
 
 ## Hacks
 
-Making the CoordType to be i16 reduced memory usage and enabled
-running this program on larger inputs (currently k=2222, but bigger
-inputs might be possible). Note, that approximate solutions for this
-problem are easy to find, so this is useful only for exact algorithm
-fanatics, or people interested in the dynamic programming solution
-(which is admittedly quite interesting here).
+- Using an annulus to identify good/bad points.
+
+- Computing the convex-hull of the bad points together with the origin, to identify
+  good points that are undercover bad points, and register them as bad points.
+
+  + bad_ch: Compute the convex-hull of all the bad points (old and newly minted).
+
+- For each good point p, we precompute distance from p to the origin, going around the
+  bad_ch. This is dto (distance to origin) in the code. Now, whenever considering a 
+  configuration, we compute a lower bound of completing this solution into a full 
+  solution by adding the dto to the current perimeter. If this is bigger than our 
+  current best solution, then we eliminate the configuration from the dp (by not 
+  inserting it to the heap).
+
+- Making the CoordType to be i16 reduced memory usage and enabled
+  running this program on larger inputs (currently k=19_999, but bigger
+  inputs should be possible). Note, that approximate solutions for this
+  problem are easy to find, so this is useful only for exact algorithm
+  fanatics, or people interested in the dynamic programming solution
+  (which is admittedly quite interesting here).
 

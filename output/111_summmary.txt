@@ -1,5 +1,5 @@
-# Good points: 154
-# bad  points: 278
+# Good points: 150
+# bad  points: 282
 k: 111
 Perimeter        : 35.47160775215929
 circle perimeter : 35.962819139658286

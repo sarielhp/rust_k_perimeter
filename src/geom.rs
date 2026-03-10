@@ -1,4 +1,7 @@
-use std::{cmp::{max, min}, ops::{Add, Div, Mul, Sub}};
+use std::{
+    cmp::{max, min},
+    ops::{Add, Div, Mul, Sub},
+};
 
 pub type CoordType = i16;
 
@@ -103,8 +106,8 @@ pub fn is_lefteq_turn(a: Point2D, b: Point2D, c: Point2D) -> bool {
     (b.x - a.x) * (c.y - a.y) >= (b.y - a.y) * (c.x - a.x)
 }
 
-pub fn d_y( a:Point2D, b:Point2D ) -> f64 {
-    (a-b).norm()
+pub fn d_y(a: Point2D, b: Point2D) -> f64 {
+    (a - b).norm()
 }
 
 pub fn is_left_turn(a: Point2D, b: Point2D, c: Point2D) -> bool {
@@ -145,8 +148,6 @@ pub fn euclidean_length(sol: &[Point2D]) -> f64 {
     }
     l
 }
-
-
 
 pub fn polygon_boundary_distance(poly: &[Point2D], query_point: Point2D) -> f64 {
     let n = poly.len();
@@ -624,6 +625,13 @@ impl GridSet {
         }
     }
 
+    pub fn delete(&mut self, p: Point2D) {
+        if p.x >= self.min_x && p.x <= self.max_x && p.y >= self.min_y && p.y <= self.max_y {
+            let idx = (p.y - self.min_y) as usize * self.width + (p.x - self.min_x) as usize;
+            self.data[idx] = false;
+        }
+    }
+
     pub fn insert_val(&mut self, p: Point2D, val: f64) {
         if p.x >= self.min_x && p.x <= self.max_x && p.y >= self.min_y && p.y <= self.max_y {
             let idx = (p.y - self.min_y) as usize * self.width + (p.x - self.min_x) as usize;
@@ -632,7 +640,7 @@ impl GridSet {
     }
 
     #[allow(dead_code)]
-    pub fn get_dto(&self, p: Point2D ) -> f64 {
+    pub fn get_dto(&self, p: Point2D) -> f64 {
         if p.x >= self.min_x && p.x <= self.max_x && p.y >= self.min_y && p.y <= self.max_y {
             let idx = (p.y - self.min_y) as usize * self.width + (p.x - self.min_x) as usize;
             self.dto[idx]
@@ -657,7 +665,7 @@ impl GridSet {
             }
             for x in self.min_x..=self.max_x {
                 let p = Point2D::new(x, y);
-                if !self.contains( &p ) {
+                if !self.contains(&p) {
                     continue;
                 }
                 let l = distance_to_origin(bad_ch, p);
@@ -673,8 +681,8 @@ impl GridSet {
 ///  1 -> Clockwise
 ///  2 -> Counterclockwise
 fn orientation(p: Point2D, q: Point2D, r: Point2D) -> i32 {
-    let val =  (q.y as i64 - p.y as i64) * (r.x as i64 - q.x as i64)
-        - (q.x as i64 - p.x as i64) * (r.y as i64 - q.y as i64) ;
+    let val = (q.y as i64 - p.y as i64) * (r.x as i64 - q.x as i64)
+        - (q.x as i64 - p.x as i64) * (r.y as i64 - q.y as i64);
     if val == 0 {
         return 0;
     }
@@ -763,41 +771,44 @@ pub fn is_all_left_turns(p: Point2D, p_next: Point2D, v: &[Point2D]) -> bool {
     true
 }
 
-pub fn distance_to_origin(bad_ch : &[Point2D], p : Point2D) -> f64 {
-    let origin = Point2D{ x: 0, y: 0 };
-    if ! does_segment_intersect_polygon( bad_ch, origin, p ) {
-        return  d_y( origin, p );
+pub fn distance_to_origin(bad_ch: &[Point2D], p: Point2D) -> f64 {
+    let origin = Point2D { x: 0, y: 0 };
+    if !does_segment_intersect_polygon(bad_ch, origin, p) {
+        return d_y(origin, p);
     }
     let mut pnts = bad_ch.to_vec();
-    pnts.push( origin );
-    pnts.push( p );
-    let poly = convex_hull( &pnts );
+    pnts.push(origin);
+    pnts.push(p);
+    let poly = convex_hull(&pnts);
 
     let n = poly.len();
-    assert!( n > 2 );
-    assert!( is_left_turn( poly[0], poly[1], poly[2] ) );
+    assert!(n > 2);
+    assert!(is_left_turn(poly[0], poly[1], poly[2]));
 
     // This will return the index or panic with the message provided
-    let i_o = poly.iter().position(|&x| x == origin)
+    let i_o = poly
+        .iter()
+        .position(|&x| x == origin)
         .expect("Origin not found in CH!");
-    let i_p = poly.iter().position(|&x| x == p)
+    let i_p = poly
+        .iter()
+        .position(|&x| x == p)
         .expect("p not found in CH!");
 
-    let s = min( i_o, i_p );
-    let t = max( i_o, i_p );
-    assert!( s < t );
+    let s = min(i_o, i_p);
+    let t = max(i_o, i_p);
+    assert!(s < t);
     let mut t_l = 0.0;
-    for k in s..t  {
-        t_l += d_y( poly[ k ], poly[ k + 1 ] );
+    for k in s..t {
+        t_l += d_y(poly[k], poly[k + 1]);
     }
-    if  i_p < i_o {
+    if i_p < i_o {
         return t_l;
     }
 
-    let total_l = euclidean_length( &poly );
+    let total_l = euclidean_length(&poly);
     total_l - t_l
 }
-
 
 pub fn compute_good_bad_sets(ch_m: &[Point2D], l: f64) -> (GridSet, GridSet, Vec<Point2D>) {
     let (min_x, max_x, min_y, max_y) = bound(&[ch_m], (l + 3.0).ceil() as i32);
@@ -814,6 +825,7 @@ pub fn compute_good_bad_sets(ch_m: &[Point2D], l: f64) -> (GridSet, GridSet, Vec
             let f_in = is_point_in_polygon(ch_m, p);
             let d = polygon_boundary_distance(ch_m, p);
 
+            
             if d > l {
                 bad.insert(p);
                 if f_in {
@@ -826,6 +838,22 @@ pub fn compute_good_bad_sets(ch_m: &[Point2D], l: f64) -> (GridSet, GridSet, Vec
             if f_in || d <= l {
                 good.insert(p);
             }
+        }
+    }
+   
+    bad_in.push( Point2D{ x: 0, y: 0 } );
+    let bad_ch_ext = convex_hull(&bad_in);
+    bad_in.pop();
+
+    for y in min_y..=max_y {
+        for x in min_x..=max_x {
+            if  x == 0  &&  y == 0 { continue; }
+            let p = Point2D::new(x, y);
+            if ! good.contains( &p )  { continue; }
+            if ! is_point_in_polygon( &bad_ch_ext, p ) { continue; }
+            good.delete( p );
+            bad.insert( p );
+            bad_in.push( p );
         }
     }
     let bad_ch = convex_hull(&bad_in);

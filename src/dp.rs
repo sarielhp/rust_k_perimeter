@@ -248,7 +248,7 @@ pub fn minimize_perimeter_dp(
             }
 
             // let total_perim = new_perim + good.dto( next_cfg.loc.norm();
-            let total_perim = new_perim + good.get_dto( next_cfg.loc );
+            let total_perim = new_perim + good.get_dto(next_cfg.loc);
             if total_perim > opt_perim {
                 //println!("Shakshoka!");
                 continue;
