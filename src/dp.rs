@@ -1,3 +1,5 @@
+// dp.rs
+
 use crate::geom::{
     is_all_left_turns, is_colinear, is_lefteq_turn, is_right_turn, triangle_count_new_points,
     GridSet, Point2D,
@@ -8,7 +10,7 @@ use std::collections::BinaryHeap;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct DPStateKey {
-    pub loc_prev: Point2D,
+    pub dir_index: u16,
     pub loc: Point2D,
     pub n_g: u32,
 }
@@ -24,7 +26,7 @@ impl Ord for DPStateKey {
         self.n_g
             .cmp(&other.n_g)
             .then(self.loc.cmp(&other.loc))
-            .then(self.loc_prev.cmp(&other.loc_prev))
+            .then(self.dir_index.cmp(&other.dir_index))
     }
 }
 
@@ -32,21 +34,21 @@ impl Ord for DPStateKey {
 pub struct DPStateValue {
     pub perimeter_so_far: f64,
     pub prev_key: DPStateKey,
-    pub dir_index: u32,
     pub handled: bool,
 }
 
 pub fn comp_next_conf(
     cfg: &DPStateKey,
     perimeter_so_far: f64,
-    v: Point2D,
+    i_v: u16,
     k: u32,
     sqrt_k: u32,
     opt_perim: f64,
+    dirs : & Vec<Point2D>
 ) -> (bool, DPStateKey, f64) {
-    let a = cfg.loc_prev;
+    let a = cfg.loc - dirs[ cfg.dir_index as usize ];
     let b = cfg.loc;
-    let c = cfg.loc + v;
+    let c = cfg.loc + dirs[ i_v as usize ];
 
     let origin = Point2D::new(0, 0);
 
@@ -70,13 +72,14 @@ pub fn comp_next_conf(
         }
     }
 
+    let &v = &dirs[ i_v as usize ];
     assert!(b != c);
     assert!(v.x != 0 || v.y != 0);
 
     let (tri_i_new, tri_b_new) = triangle_count_new_points(origin, b, c);
 
     //assert!(tri_i_new >= 0 && tri_b_new >= 0);
-    let n_g = cfg.n_g + tri_i_new + tri_b_new;
+    let n_g: u32 = cfg.n_g + tri_i_new + tri_b_new;
 
     if n_g > 0 && c.is_zero() {
         return (false, *cfg, -1.0);
@@ -87,7 +90,7 @@ pub fn comp_next_conf(
     }
 
     let new_cfg = DPStateKey {
-        loc_prev: b,
+        dir_index: i_v,
         loc: c,
         n_g,
     };
@@ -185,8 +188,11 @@ pub fn minimize_perimeter_dp(
 
     let mut opt_perim = ub_circle.min(sq_perim);
 
+    let dirs = crate::geom::generate_primitive_vectors(max_edge_l);
+    let stops = crate::geom::comp_stop_indexes(&dirs, max_angle);
+
     let start_key = DPStateKey {
-        loc_prev: Point2D::new(0, 0),
+        dir_index: 0,
         loc: Point2D::new(0, 0),
         n_g: 1,
     };
@@ -203,29 +209,32 @@ pub fn minimize_perimeter_dp(
     let start_val = DPStateValue {
         perimeter_so_far: 0.0,
         prev_key: start_key,
-        dir_index: 0,
         handled: false,
     };
     d_all.insert(start_key, start_val);
 
-    let v_vec = crate::geom::generate_primitive_vectors(max_edge_l);
-    let stops = crate::geom::comp_stop_indexes(&v_vec, max_angle);
 
+    let mut conf_count: i64 = 0;
+    let mut conf_useless_count: i64 = 0;
     while let Some(QueueItem { n_g: _, cfg }) = pq.pop() {
-        let (dir_start, perimeter_so_far) = {
+        let mut store_count = 0;
+        conf_count += 1;
+        let dir_start = cfg.dir_index;
+        let perimeter_so_far = {
             let val = d_all.get_mut(&cfg).unwrap();
             if val.handled {
+                println!( "HANDLED???");
                 continue;
             }
             val.handled = true;
-            (val.dir_index, val.perimeter_so_far)
+            val.perimeter_so_far
         };
 
         let dir_end = stops[dir_start as usize];
-        let _prev_dir = v_vec[dir_start as usize];
+        let _prev_dir = dirs[dir_start as usize];
 
         for dir_i in (dir_start as usize)..=dir_end {
-            let v = v_vec[dir_i];
+            let v = dirs[dir_i];
 
             if cfg.loc.y == 0 && v.y <= 0 {
                 continue;
@@ -242,7 +251,8 @@ pub fn minimize_perimeter_dp(
             }
 
             let (f_valid, next_cfg, new_perim) =
-                comp_next_conf(&cfg, perimeter_so_far, v, k, sqrt_k, opt_perim);
+                comp_next_conf(&cfg, perimeter_so_far, dir_i as u16, k, sqrt_k,
+                                opt_perim, &dirs);
             if !f_valid {
                 continue;
             }
@@ -250,26 +260,33 @@ pub fn minimize_perimeter_dp(
             // let total_perim = new_perim + good.dto( next_cfg.loc.norm();
             let total_perim = new_perim + good.get_dto(next_cfg.loc);
             if total_perim > opt_perim {
-                //println!("Shakshoka!");
                 continue;
             }
+            
+            let mut f_queued = false;
+            if let Some(_tmp_val) = d_all.get(&next_cfg) {
+                f_queued = true;
+            }
+            
             if !is_store(&d_all, &next_cfg, new_perim, opt_perim, k) {
                 continue;
             }
 
+            store_count += 1;
             d_all.insert(
                 next_cfg,
                 DPStateValue {
                     perimeter_so_far: new_perim,
                     prev_key: cfg,
-                    dir_index: (dir_i as u32),
                     handled: false,
                 },
             );
-            pq.push(QueueItem {
-                n_g: next_cfg.n_g,
-                cfg: next_cfg,
-            });
+            if ! f_queued {
+                pq.push(QueueItem {
+                    n_g: next_cfg.n_g,
+                    cfg: next_cfg,
+                });
+            } else {}
 
             if next_cfg.n_g == k {
                 if total_perim < opt_perim {
@@ -278,8 +295,16 @@ pub fn minimize_perimeter_dp(
                 }
             }
         }
+        if store_count == 0 {
+            //d_all.remove(&cfg);
+            conf_useless_count += 1;
+            //            println!("Woga?");
+        }
     }
-
+    println!("# of configurations generated: {}", conf_count);
+    println!("# of dead-end  configurations: {}", conf_useless_count);
     let sol = extract_solution(&d_all, best_sol);
     (sol, ub_circle)
 }
+
+// End of file

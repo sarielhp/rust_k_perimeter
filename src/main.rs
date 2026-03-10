@@ -41,8 +41,8 @@ fn main() -> std::io::Result<()> {
 
     //let l_f = ((k as f64).powf(0.25) / 3.0).round() as i64;
     //let l = if l_f > 3 { l_f } else { 3 };
-    let l_f = ((k as f64).powf(0.25) / 4.0).round() as i64;
-    let l = if l_f > 2 { l_f } else { 2 };
+    let l_f = 1 + ((k as f64).powf(0.25) / 4.0).round() as i64;
+    let l = if l_f > 3 { l_f } else { 3 };
 
     let (mut good, bad, bad_ch) = compute_good_bad_sets(&ch_m_exp, l as f64);
 

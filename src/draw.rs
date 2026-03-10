@@ -54,7 +54,8 @@ pub fn draw_polygon_with_grid(
     std::fs::create_dir_all("output").unwrap_or_default();
     let filename: String = format!("output/{}.pdf", k);
 
-    let (min_x, max_x, min_y, max_y) = bound(&[poly, poly_circ, poly_circ_exp], 1);
+    let (min_x, max_x, _min_y_2, max_y) = bound(&[poly, poly_circ, poly_circ_exp], 3);
+    let min_y = 0;
 
     let margin = 50.0;
     let scale = (100.0 / (k as f64)).max(10.0).round() as i64;

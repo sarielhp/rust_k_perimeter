@@ -427,7 +427,7 @@ pub fn ch_disk_origin(k: usize, f_expand: bool) -> Vec<Point2D> {
             y: min_y,
         };
     }
-    println!("MV: ( {}, {} )", mv.x, mv.y);
+    //println!("MV: ( {}, {} )", mv.x, mv.y);
     let ch_n = translate_v_points(ch, mv);
 
     //println!("{:#?}", ch_n);
@@ -579,6 +579,10 @@ pub fn bound(polys: &[&[Point2D]], expand: i32) -> (CoordType, CoordType, CoordT
             max_y = max_y.max(py_max);
         }
     }
+    min_x = min_x - expand as CoordType;
+    max_x = max_x + expand as CoordType;
+    min_y = min_y - expand as CoordType;
+    max_y = max_y + expand as CoordType;
     (
         min_x - expand as CoordType,
         max_x + expand as CoordType,
@@ -592,6 +596,7 @@ pub struct GridSet {
     pub max_x: CoordType,
     pub min_y: CoordType,
     pub max_y: CoordType,
+    _size: usize,
     width: usize,
     data: Vec<bool>,
     dto: Vec<f64>, // Distance to origin
@@ -601,14 +606,18 @@ impl GridSet {
     pub fn new(min_x: CoordType, max_x: CoordType, min_y: CoordType, max_y: CoordType) -> Self {
         let width = (max_x - min_x + 1).max(0) as usize;
         let height = (max_y - min_y + 1).max(0) as usize;
+        
+        let _size = width * height;
+        println!( "Size: {}", _size );
         Self {
             min_x,
             max_x,
             min_y,
             max_y,
+            _size, 
             width,
-            data: vec![false; width * height],
-            dto: vec![-1.0; width * height],
+            data: vec![false; _size],
+            dto: vec![-1.0; _size],
         }
     }
 
@@ -811,7 +820,9 @@ pub fn distance_to_origin(bad_ch: &[Point2D], p: Point2D) -> f64 {
 }
 
 pub fn compute_good_bad_sets(ch_m: &[Point2D], l: f64) -> (GridSet, GridSet, Vec<Point2D>) {
-    let (min_x, max_x, min_y, max_y) = bound(&[ch_m], (l + 3.0).ceil() as i32);
+    let expand = (3.0 * l + 3.0).ceil() as i32;
+    let (min_x, max_x, _, max_y) = bound(&[ch_m], expand);
+    let min_y = 0;
 
     let mut bad = GridSet::new(min_x, max_x, min_y, max_y);
     let mut good = GridSet::new(min_x, max_x, min_y, max_y);
@@ -825,7 +836,6 @@ pub fn compute_good_bad_sets(ch_m: &[Point2D], l: f64) -> (GridSet, GridSet, Vec
             let f_in = is_point_in_polygon(ch_m, p);
             let d = polygon_boundary_distance(ch_m, p);
 
-            
             if d > l {
                 bad.insert(p);
                 if f_in {
@@ -840,20 +850,26 @@ pub fn compute_good_bad_sets(ch_m: &[Point2D], l: f64) -> (GridSet, GridSet, Vec
             }
         }
     }
-   
-    bad_in.push( Point2D{ x: 0, y: 0 } );
+
+    bad_in.push(Point2D { x: 0, y: 0 });
     let bad_ch_ext = convex_hull(&bad_in);
     bad_in.pop();
 
     for y in min_y..=max_y {
         for x in min_x..=max_x {
-            if  x == 0  &&  y == 0 { continue; }
+            if x == 0 && y == 0 {
+                continue;
+            }
             let p = Point2D::new(x, y);
-            if ! good.contains( &p )  { continue; }
-            if ! is_point_in_polygon( &bad_ch_ext, p ) { continue; }
-            good.delete( p );
-            bad.insert( p );
-            bad_in.push( p );
+            if !good.contains(&p) {
+                continue;
+            }
+            if !is_point_in_polygon(&bad_ch_ext, p) {
+                continue;
+            }
+            good.delete(p);
+            bad.insert(p);
+            bad_in.push(p);
         }
     }
     let bad_ch = convex_hull(&bad_in);
