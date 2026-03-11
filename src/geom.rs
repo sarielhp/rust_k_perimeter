@@ -142,7 +142,13 @@ pub fn euclidean_length(sol: &[Point2D]) -> f64 {
     if sol.is_empty() {
         return 0.0;
     }
-    let mut l = (sol.first().unwrap().clone() - sol.last().unwrap().clone()).norm();
+    let mut l = (sol.first().unwrap_or_else(|| {
+        eprintln!("Error: sol is empty in euclidean_length");
+        std::process::exit(1);
+    }).clone() - sol.last().unwrap_or_else(|| {
+        eprintln!("Error: sol is empty in euclidean_length");
+        std::process::exit(1);
+    }).clone()).norm();
     for i in 1..sol.len() {
         l += (sol[i - 1] - sol[i]).norm();
     }
@@ -152,7 +158,8 @@ pub fn euclidean_length(sol: &[Point2D]) -> f64 {
 pub fn polygon_boundary_distance(poly: &[Point2D], query_point: Point2D) -> f64 {
     let n = poly.len();
     if n < 2 {
-        panic!("Polygon must have at least 2 vertices");
+        eprintln!("Error: Polygon must have at least 2 vertices in polygon_boundary_distance");
+        std::process::exit(1);
     }
 
     let mut min_dist = f64::INFINITY;
@@ -370,12 +377,16 @@ pub fn ch_disk_origin(k: usize, f_expand: bool) -> Vec<Point2D> {
         }
     }
     assert!(v.len() > k);
-    v.sort_by(|a, b| a.norm_sq().partial_cmp(&b.norm_sq()).unwrap());
+    v.sort_by(|a, b| a.norm_sq().partial_cmp(&b.norm_sq()).unwrap_or_else(|| {
+        eprintln!("Error: NaN encountered in partial_cmp in ch_disk_origin");
+        std::process::exit(1);
+    }));
     v.truncate(k);
     //println!("v_len: {}", v.len());
 
     let Some((min_y, max_y)) = get_y_bounds(&v) else {
-        panic!("The vector was empty!");
+        eprintln!("Error: The vector was empty in ch_disk_origin");
+        std::process::exit(1);
     };
 
     if f_expand {
@@ -401,16 +412,23 @@ pub fn ch_disk_origin(k: usize, f_expand: bool) -> Vec<Point2D> {
     }
 
     let ch = convex_hull(&out);
-    let min_y = ch.iter().map(|p| p.y).min().unwrap();
+    let min_y = ch.iter().map(|p| p.y).min().unwrap_or_else(|| {
+        eprintln!("Error: Convex hull was empty when getting min_y in ch_disk_origin");
+        std::process::exit(1);
+    });
     let max_x = ch
         .iter()
         .filter(|p| p.y == min_y)
         .map(|p| p.x)
         .max()
-        .unwrap();
+        .unwrap_or_else(|| {
+            eprintln!("Error: Convex hull was empty when getting max_x in ch_disk_origin");
+            std::process::exit(1);
+        });
 
     let Some(avg) = average_of_min_y(&ch) else {
-        panic!("Vector empty?");
+        eprintln!("Error: Vector empty in average_of_min_y called by ch_disk_origin");
+        std::process::exit(1);
     };
 
     let l = ((max_x - avg.x) / 2).abs();
@@ -501,7 +519,8 @@ pub fn triangle_count_new_points(a: Point2D, b: Point2D, c: Point2D) -> (u32, u3
     };
 
     let tri_b_new: i32 = if a == c {
-        panic!("a == c inside triangle_count_new_points");
+        eprintln!("Error: a == c inside triangle_count_new_points");
+        std::process::exit(1);
     } else if a == b {
         ac_g_n as i32 + 1
     } else if area2 == 0 {
@@ -561,10 +580,22 @@ pub fn bound(polys: &[&[Point2D]], expand: i32) -> (CoordType, CoordType, CoordT
         if poly.is_empty() {
             continue;
         }
-        let px_min = poly.iter().map(|p| p.x).min().unwrap() - 1;
-        let px_max = poly.iter().map(|p| p.x).max().unwrap() + 1;
-        let py_min = poly.iter().map(|p| p.y).min().unwrap() - 1;
-        let py_max = poly.iter().map(|p| p.y).max().unwrap() + 1;
+        let px_min = poly.iter().map(|p| p.x).min().unwrap_or_else(|| {
+            eprintln!("Error: poly is empty in bound");
+            std::process::exit(1);
+        }) - 1;
+        let px_max = poly.iter().map(|p| p.x).max().unwrap_or_else(|| {
+            eprintln!("Error: poly is empty in bound");
+            std::process::exit(1);
+        }) + 1;
+        let py_min = poly.iter().map(|p| p.y).min().unwrap_or_else(|| {
+            eprintln!("Error: poly is empty in bound");
+            std::process::exit(1);
+        }) - 1;
+        let py_max = poly.iter().map(|p| p.y).max().unwrap_or_else(|| {
+            eprintln!("Error: poly is empty in bound");
+            std::process::exit(1);
+        }) + 1;
 
         if !f_init {
             min_x = px_min;
@@ -798,11 +829,17 @@ pub fn distance_to_origin(bad_ch: &[Point2D], p: Point2D) -> f64 {
     let i_o = poly
         .iter()
         .position(|&x| x == origin)
-        .expect("Origin not found in CH!");
+        .unwrap_or_else(|| {
+            eprintln!("Error: Origin not found in CH! in distance_to_origin");
+            std::process::exit(1);
+        });
     let i_p = poly
         .iter()
         .position(|&x| x == p)
-        .expect("p not found in CH!");
+        .unwrap_or_else(|| {
+            eprintln!("Error: p not found in CH! in distance_to_origin");
+            std::process::exit(1);
+        });
 
     let s = min(i_o, i_p);
     let t = max(i_o, i_p);

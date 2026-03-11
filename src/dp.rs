@@ -7,6 +7,7 @@ use crate::geom::{
 use rustc_hash::FxHashMap;
 use std::cmp::Ordering;
 use std::collections::BinaryHeap;
+use std::process;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct DPStateKey {
@@ -107,7 +108,10 @@ pub fn extract_solution(
     let mut curr = best_sol;
 
     loop {
-        let val = d_all.get(&curr).unwrap();
+        let val = d_all.get(&curr).unwrap_or_else(|| {
+            eprintln!("Error in extract_solution: Key '{:#?}' not found in map.", curr);
+            std::process::exit(1);
+        });
         out.push(curr.loc);
         if val.prev_key == curr {
             break;
@@ -181,7 +185,10 @@ pub fn minimize_perimeter_dp(
     let ub_circle = 2.0 * (std::f64::consts::PI * (k as f64)).sqrt();
     let sq_perim = (4 * sqrt_k + 6) as f64;
     let max_edge_l: u32 = (k as f64).powf(1.0 / 3.0).round() as u32 + 1;
-
+    let power = 19;
+    let mask = (1 << power) - 1;
+    
+    println!("k           : {}", k);
     println!("sqrt_k      : {}", sqrt_k);
     println!("max_edge_l  : {}", max_edge_l);
     println!("max angle   : {}", max_angle);
@@ -219,9 +226,19 @@ pub fn minimize_perimeter_dp(
     while let Some(QueueItem { n_g: _, cfg }) = pq.pop() {
         let mut store_count = 0;
         conf_count += 1;
+        if conf_count & mask == 0 {
+            println!("c: {}  n_g: {}", conf_count, cfg.n_g );
+        }
         let dir_start = cfg.dir_index;
         let perimeter_so_far = {
-            let val = d_all.get_mut(&cfg).unwrap();
+
+            let val = d_all.get_mut( &cfg ).unwrap_or_else(|| {
+                println!("Error: Key '{:#?}' not found in map.", cfg );
+                eprintln!("Error: Key '{:#?}' not found in map.", cfg );
+                process::exit(1); // Exit with a non-zero status code
+            });
+
+            //let val = d_all.get_mut(&cfg).unwrap();
             if val.handled {
                 println!( "HANDLED???");
                 continue;
