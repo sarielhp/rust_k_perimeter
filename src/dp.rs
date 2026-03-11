@@ -8,7 +8,8 @@ use rustc_hash::FxHashMap;
 use std::cmp::Ordering;
 use std::collections::BinaryHeap;
 use std::process;
-
+use num_format::{Locale, ToFormattedString};
+         
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct DPStateKey {
     pub dir_index: u16,
@@ -46,11 +47,11 @@ pub fn comp_next_conf(
     k: u32,
     sqrt_k: u32,
     opt_perim: f64,
-    dirs : & Vec<Point2D>
+    dirs: &Vec<Point2D>,
 ) -> (bool, DPStateKey, f64) {
-    let a = cfg.loc - dirs[ cfg.dir_index as usize ];
+    let a = cfg.loc - dirs[cfg.dir_index as usize];
     let b = cfg.loc;
-    let c = cfg.loc + dirs[ i_v as usize ];
+    let c = cfg.loc + dirs[i_v as usize];
 
     let origin = Point2D::new(0, 0);
 
@@ -74,7 +75,7 @@ pub fn comp_next_conf(
         }
     }
 
-    let &v = &dirs[ i_v as usize ];
+    let &v = &dirs[i_v as usize];
     assert!(b != c);
     assert!(v.x != 0 || v.y != 0);
 
@@ -108,7 +109,10 @@ pub fn extract_solution(
 ) -> Vec<Point2D> {
     let mut out = Vec::new();
     let mut curr_idx = *d_all.get(&best_sol).unwrap_or_else(|| {
-        eprintln!("Error in extract_solution: Key '{:#?}' not found in map.", best_sol);
+        eprintln!(
+            "Error in extract_solution: Key '{:#?}' not found in map.",
+            best_sol
+        );
         std::process::exit(1);
     });
 
@@ -190,7 +194,7 @@ pub fn minimize_perimeter_dp(
     let max_edge_l: u32 = (k as f64).powf(1.0 / 3.0).round() as u32 + 1;
     let power = 19;
     let mask = (1 << power) - 1;
-    
+
     println!("k           : {}", k);
     println!("sqrt_k      : {}", sqrt_k);
     println!("max_edge_l  : {}", max_edge_l);
@@ -215,9 +219,13 @@ pub fn minimize_perimeter_dp(
         cfg: start_key,
     });
 
+    let hint_size = 3 * (k as usize) * (k as usize) / 2;
+    
+    println!("hint_size   : {}", (hint_size as i64).to_formatted_string( &Locale::en ) );
+    
     let mut d_all = FxHashMap::default();
-    let hint_size = (k as usize) * (k as usize);
-    println!("hint_size   : {}", hint_size);
+    //let mut d_all = FxHashMap::with_capacity( hint_size );
+    d_all.reserve(hint_size);
     let mut dp_vals = Vec::with_capacity(hint_size);
     let start_val = DPStateValue {
         cfg: start_key,
@@ -228,39 +236,37 @@ pub fn minimize_perimeter_dp(
     d_all.insert(start_key, 0);
     dp_vals.push(start_val);
 
-
     let mut conf_count: i64 = 0;
     let mut conf_useless_count: i64 = 0;
     while let Some(QueueItem { n_g: _, cfg }) = pq.pop() {
         let mut store_count = 0;
         conf_count += 1;
         if conf_count & mask == 0 {
-            use num_format::{Locale, ToFormattedString};
             let used_bytes = dp_vals.len() * std::mem::size_of::<DPStateValue>();
             let cap_bytes = dp_vals.capacity() * std::mem::size_of::<DPStateValue>();
             let used_mb = used_bytes / 1_048_576;
             let cap_mb = cap_bytes / 1_048_576;
             println!(
-                "c: {}  n_g: {}  dp_vals mem (used / cap): {} MB / {} MB",
+                "c: {}  n_g: {}  dp_vals (u/t): {} MB / {} MB  d_all {}",
                 conf_count.to_formatted_string(&Locale::en),
                 cfg.n_g,
                 used_mb.to_formatted_string(&Locale::en),
-                cap_mb.to_formatted_string(&Locale::en)
+                cap_mb.to_formatted_string(&Locale::en),
+                d_all.len().to_formatted_string( &Locale::en )
             );
         }
         let dir_start = cfg.dir_index;
         let (cfg_idx, perimeter_so_far) = {
-
-            let &idx = d_all.get( &cfg ).unwrap_or_else(|| {
-                println!("Error: Key '{:#?}' not found in map.", cfg );
-                eprintln!("Error: Key '{:#?}' not found in map.", cfg );
+            let &idx = d_all.get(&cfg).unwrap_or_else(|| {
+                println!("Error: Key '{:#?}' not found in map.", cfg);
+                eprintln!("Error: Key '{:#?}' not found in map.", cfg);
                 process::exit(1); // Exit with a non-zero status code
             });
 
             let val = &mut dp_vals[idx];
             //let val = d_all.get_mut(&cfg).unwrap();
             if val.handled {
-                println!( "HANDLED???");
+                println!("HANDLED???");
                 continue;
             }
             val.handled = true;
@@ -287,9 +293,15 @@ pub fn minimize_perimeter_dp(
                 continue;
             }
 
-            let (f_valid, next_cfg, new_perim) =
-                comp_next_conf(&cfg, perimeter_so_far, dir_i as u16, k, sqrt_k,
-                                opt_perim, &dirs);
+            let (f_valid, next_cfg, new_perim) = comp_next_conf(
+                &cfg,
+                perimeter_so_far,
+                dir_i as u16,
+                k,
+                sqrt_k,
+                opt_perim,
+                &dirs,
+            );
             if !f_valid {
                 continue;
             }
@@ -299,14 +311,14 @@ pub fn minimize_perimeter_dp(
             if total_perim > opt_perim {
                 continue;
             }
-            
+
             let mut f_queued = false;
             let mut existing_idx = None;
             if let Some(&idx) = d_all.get(&next_cfg) {
                 f_queued = true;
                 existing_idx = Some(idx);
             }
-            
+
             if !is_store(&d_all, &dp_vals, &next_cfg, new_perim, opt_perim, k) {
                 continue;
             }
@@ -326,12 +338,13 @@ pub fn minimize_perimeter_dp(
                 d_all.insert(next_cfg, idx);
             }
 
-            if ! f_queued {
+            if !f_queued {
                 pq.push(QueueItem {
                     n_g: next_cfg.n_g,
                     cfg: next_cfg,
                 });
-            } else {}
+            } else {
+            }
 
             if next_cfg.n_g == k {
                 if total_perim < opt_perim {
