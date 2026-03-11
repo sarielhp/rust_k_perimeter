@@ -11,4 +11,5 @@ panic = "abort"        # Removes stack unwinding code; smaller and faster, but n
 
 [dependencies]
 cairo-rs = { version = "0.20", features = ["pdf", "svg", "ps"] }
+num-format = "0.4.4"
 rustc-hash = "2.1.1"

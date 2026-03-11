@@ -33,8 +33,9 @@ impl Ord for DPStateKey {
 
 #[derive(Debug, Clone, Copy, PartialEq, PartialOrd)]
 pub struct DPStateValue {
+    pub cfg: DPStateKey,
     pub perimeter_so_far: f64,
-    pub prev_key: DPStateKey,
+    pub prev_idx: usize,
     pub handled: bool,
 }
 
@@ -101,22 +102,23 @@ pub fn comp_next_conf(
 }
 
 pub fn extract_solution(
-    d_all: &FxHashMap<DPStateKey, DPStateValue>,
+    d_all: &FxHashMap<DPStateKey, usize>,
+    dp_vals: &[DPStateValue],
     best_sol: DPStateKey,
 ) -> Vec<Point2D> {
     let mut out = Vec::new();
-    let mut curr = best_sol;
+    let mut curr_idx = *d_all.get(&best_sol).unwrap_or_else(|| {
+        eprintln!("Error in extract_solution: Key '{:#?}' not found in map.", best_sol);
+        std::process::exit(1);
+    });
 
     loop {
-        let val = d_all.get(&curr).unwrap_or_else(|| {
-            eprintln!("Error in extract_solution: Key '{:#?}' not found in map.", curr);
-            std::process::exit(1);
-        });
-        out.push(curr.loc);
-        if val.prev_key == curr {
+        let val = &dp_vals[curr_idx];
+        out.push(val.cfg.loc);
+        if val.prev_idx == curr_idx {
             break;
         }
-        curr = val.prev_key;
+        curr_idx = val.prev_idx;
     }
 
     // The Julia code pushes in reverse chronological order (end -> start)
@@ -127,7 +129,8 @@ pub fn extract_solution(
 }
 
 pub fn is_store(
-    d_all: &FxHashMap<DPStateKey, DPStateValue>,
+    d_all: &FxHashMap<DPStateKey, usize>,
+    dp_vals: &[DPStateValue],
     next_cfg: &DPStateKey,
     new_perim: f64,
     opt_perim: f64,
@@ -140,8 +143,8 @@ pub fn is_store(
         println!("FLOGI");
         return false;
     }
-    if let Some(val) = d_all.get(next_cfg) {
-        if val.perimeter_so_far < new_perim {
+    if let Some(&idx) = d_all.get(next_cfg) {
+        if dp_vals[idx].perimeter_so_far < new_perim {
             return false;
         }
     }
@@ -213,12 +216,17 @@ pub fn minimize_perimeter_dp(
     });
 
     let mut d_all = FxHashMap::default();
+    let hint_size = (k as usize) * (k as usize);
+    println!("hint_size   : {}", hint_size);
+    let mut dp_vals = Vec::with_capacity(hint_size);
     let start_val = DPStateValue {
+        cfg: start_key,
         perimeter_so_far: 0.0,
-        prev_key: start_key,
+        prev_idx: 0,
         handled: false,
     };
-    d_all.insert(start_key, start_val);
+    d_all.insert(start_key, 0);
+    dp_vals.push(start_val);
 
 
     let mut conf_count: i64 = 0;
@@ -227,24 +235,36 @@ pub fn minimize_perimeter_dp(
         let mut store_count = 0;
         conf_count += 1;
         if conf_count & mask == 0 {
-            println!("c: {}  n_g: {}", conf_count, cfg.n_g );
+            use num_format::{Locale, ToFormattedString};
+            let used_bytes = dp_vals.len() * std::mem::size_of::<DPStateValue>();
+            let cap_bytes = dp_vals.capacity() * std::mem::size_of::<DPStateValue>();
+            let used_mb = used_bytes / 1_048_576;
+            let cap_mb = cap_bytes / 1_048_576;
+            println!(
+                "c: {}  n_g: {}  dp_vals mem (used / cap): {} MB / {} MB",
+                conf_count.to_formatted_string(&Locale::en),
+                cfg.n_g,
+                used_mb.to_formatted_string(&Locale::en),
+                cap_mb.to_formatted_string(&Locale::en)
+            );
         }
         let dir_start = cfg.dir_index;
-        let perimeter_so_far = {
+        let (cfg_idx, perimeter_so_far) = {
 
-            let val = d_all.get_mut( &cfg ).unwrap_or_else(|| {
+            let &idx = d_all.get( &cfg ).unwrap_or_else(|| {
                 println!("Error: Key '{:#?}' not found in map.", cfg );
                 eprintln!("Error: Key '{:#?}' not found in map.", cfg );
                 process::exit(1); // Exit with a non-zero status code
             });
 
+            let val = &mut dp_vals[idx];
             //let val = d_all.get_mut(&cfg).unwrap();
             if val.handled {
                 println!( "HANDLED???");
                 continue;
             }
             val.handled = true;
-            val.perimeter_so_far
+            (idx, val.perimeter_so_far)
         };
 
         let dir_end = stops[dir_start as usize];
@@ -281,23 +301,31 @@ pub fn minimize_perimeter_dp(
             }
             
             let mut f_queued = false;
-            if let Some(_tmp_val) = d_all.get(&next_cfg) {
+            let mut existing_idx = None;
+            if let Some(&idx) = d_all.get(&next_cfg) {
                 f_queued = true;
+                existing_idx = Some(idx);
             }
             
-            if !is_store(&d_all, &next_cfg, new_perim, opt_perim, k) {
+            if !is_store(&d_all, &dp_vals, &next_cfg, new_perim, opt_perim, k) {
                 continue;
             }
 
             store_count += 1;
-            d_all.insert(
-                next_cfg,
-                DPStateValue {
-                    perimeter_so_far: new_perim,
-                    prev_key: cfg,
-                    handled: false,
-                },
-            );
+            let next_val = DPStateValue {
+                cfg: next_cfg,
+                perimeter_so_far: new_perim,
+                prev_idx: cfg_idx,
+                handled: false,
+            };
+            if let Some(idx) = existing_idx {
+                dp_vals[idx] = next_val;
+            } else {
+                let idx = dp_vals.len();
+                dp_vals.push(next_val);
+                d_all.insert(next_cfg, idx);
+            }
+
             if ! f_queued {
                 pq.push(QueueItem {
                     n_g: next_cfg.n_g,
@@ -320,7 +348,7 @@ pub fn minimize_perimeter_dp(
     }
     println!("# of configurations generated: {}", conf_count);
     println!("# of dead-end  configurations: {}", conf_useless_count);
-    let sol = extract_solution(&d_all, best_sol);
+    let sol = extract_solution(&d_all, &dp_vals, best_sol);
     (sol, ub_circle)
 }
 
