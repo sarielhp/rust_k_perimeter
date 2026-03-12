@@ -1,9 +1,0 @@
-# Good points: 457
-# bad  points: 1650
-k: 1123
-Perimeter        : 117.31484990439662
-circle perimeter : 117.5706325022881
-Naive perimeter  : 118.79408318567617
-Max angle of sol : 0.32175055439664263
-Longest edge len : 7
-Running time in seconds: 2

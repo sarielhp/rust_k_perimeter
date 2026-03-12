@@ -1,102 +1,10 @@
+use crate::point::*;
+
 use std::{
     cmp::{max, min},
-    ops::{Add, Div, Mul, Sub},
+  //  ops::{Add, Div, Mul, Sub},
 };
 
-pub type CoordType = i16;
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
-pub struct Point2D {
-    pub x: CoordType,
-    pub y: CoordType,
-}
-
-impl Point2D {
-    pub fn new(x: CoordType, y: CoordType) -> Self {
-        Self { x, y }
-    }
-
-    pub fn is_zero(&self) -> bool {
-        self.x == 0 && self.y == 0
-    }
-
-    pub fn norm_sq(&self) -> f64 {
-        ((self.x * self.x) + (self.y * self.y)) as f64
-    }
-
-    pub fn norm(&self) -> f64 {
-        self.norm_sq().sqrt()
-    }
-}
-
-impl Add for Point2D {
-    type Output = Point2D;
-    fn add(self, rhs: Self) -> Self::Output {
-        Point2D::new(self.x + rhs.x, self.y + rhs.y)
-    }
-}
-
-impl Sub for Point2D {
-    type Output = Point2D;
-    fn sub(self, rhs: Self) -> Self::Output {
-        Point2D::new(self.x - rhs.x, self.y - rhs.y)
-    }
-}
-
-impl Mul<i32> for Point2D {
-    type Output = Point2D;
-    fn mul(self, rhs: i32) -> Self::Output {
-        Point2D::new(self.x * rhs as CoordType, self.y * rhs as CoordType)
-    }
-}
-
-impl Div<i32> for Point2D {
-    type Output = Point2D;
-    fn div(self, rhs: i32) -> Self::Output {
-        Point2D::new(self.x / rhs as CoordType, self.y / rhs as CoordType)
-    }
-}
-
-pub fn dot(a: &Point2D, b: &Point2D) -> i64 {
-    a.x as i64 * b.x as i64 + a.y as i64 * b.y as i64
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, PartialOrd)]
-pub struct Point2DF {
-    pub x: f64,
-    pub y: f64,
-}
-
-impl Point2DF {
-    pub fn new(x: f64, y: f64) -> Self {
-        Self { x, y }
-    }
-
-    pub fn norm(&self) -> f64 {
-        (self.x * self.x + self.y * self.y).sqrt()
-    }
-}
-
-impl Add for Point2DF {
-    type Output = Point2DF;
-    fn add(self, rhs: Self) -> Self::Output {
-        Point2DF::new(self.x + rhs.x, self.y + rhs.y)
-    }
-}
-
-impl Sub for Point2DF {
-    type Output = Point2DF;
-    fn sub(self, rhs: Self) -> Self::Output {
-        Point2DF::new(self.x - rhs.x, self.y - rhs.y)
-    }
-}
-
-impl Mul<f64> for Point2DF {
-    type Output = Point2DF;
-    fn mul(self, rhs: f64) -> Self::Output {
-        Point2DF::new(self.x * rhs, self.y * rhs)
-    }
-}
 
 pub fn vtrans(p: &[Point2D], v: Point2D) -> Vec<Point2D> {
     p.iter().map(|&pt| pt + v).collect()
@@ -213,6 +121,10 @@ pub fn double_triangle_area(a: Point2D, b: Point2D, c: Point2D) -> i32 {
         + (b.x as i64) * (c.y as i64 - a.y as i64)
         + (c.x as i64) * (a.y as i64 - b.y as i64))
         .abs() as i32
+}
+
+pub fn triangle_area(a: Point2D, b: Point2D, c: Point2D) -> f64 {
+    double_triangle_area(a, b, c) as f64 / 2.0
 }
 
 pub fn gcd(mut a: i64, mut b: i64) -> i64 {
@@ -631,6 +543,7 @@ pub struct GridSet {
     width: usize,
     data: Vec<bool>,
     dto: Vec<f64>, // Distance to origin
+    dto_g: Vec<i64>, // Number of grid points inside distance to origin
 }
 
 impl GridSet {
@@ -649,6 +562,7 @@ impl GridSet {
             width,
             data: vec![false; _size],
             dto: vec![-1.0; _size],
+            dto_g: vec![0; _size],
         }
     }
 
@@ -672,20 +586,21 @@ impl GridSet {
         }
     }
 
-    pub fn insert_val(&mut self, p: Point2D, val: f64) {
+    pub fn insert_val(&mut self, p: Point2D, val: f64, g: i64) {
         if p.x >= self.min_x && p.x <= self.max_x && p.y >= self.min_y && p.y <= self.max_y {
             let idx = (p.y - self.min_y) as usize * self.width + (p.x - self.min_x) as usize;
             self.dto[idx] = val;
+            self.dto_g[idx] = g;
         }
     }
 
     #[allow(dead_code)]
-    pub fn get_dto(&self, p: Point2D) -> f64 {
+    pub fn get_dto(&self, p: Point2D) -> (f64, i64) {
         if p.x >= self.min_x && p.x <= self.max_x && p.y >= self.min_y && p.y <= self.max_y {
             let idx = (p.y - self.min_y) as usize * self.width + (p.x - self.min_x) as usize;
-            self.dto[idx]
+            (self.dto[idx], self.dto_g[idx])
         } else {
-            self.min_x as f64 * self.min_x as f64
+            (self.min_x as f64 * self.min_x as f64, 0)
         }
     }
 
@@ -708,8 +623,8 @@ impl GridSet {
                 if !self.contains(&p) {
                     continue;
                 }
-                let l = distance_to_origin(bad_ch, p);
-                self.insert_val(p, l);
+                let (l,g) = distance_to_origin(bad_ch, p);
+                self.insert_val(p, l, g);
             }
         }
     }
@@ -811,10 +726,10 @@ pub fn is_all_left_turns(p: Point2D, p_next: Point2D, v: &[Point2D]) -> bool {
     true
 }
 
-pub fn distance_to_origin(bad_ch: &[Point2D], p: Point2D) -> f64 {
+pub fn distance_to_origin(bad_ch: &[Point2D], p: Point2D) -> (f64, i64) {
     let origin = Point2D { x: 0, y: 0 };
     if !does_segment_intersect_polygon(bad_ch, origin, p) {
-        return d_y(origin, p);
+        return (d_y(origin, p), 0);
     }
     let mut pnts = bad_ch.to_vec();
     pnts.push(origin);
@@ -845,15 +760,51 @@ pub fn distance_to_origin(bad_ch: &[Point2D], p: Point2D) -> f64 {
     let t = max(i_o, i_p);
     assert!(s < t);
     let mut t_l = 0.0;
+    let mut t_b = 1;
+    let mut area = 0.0;
     for k in s..t {
         t_l += d_y(poly[k], poly[k + 1]);
+        t_b += grid_points_inside_edge( poly[ k ], poly[ k + 1 ] ) + 1;
+        area += triangle_area(origin, poly[k], poly[k + 1]);
     }
+    let b_edge = grid_points_inside_edge( poly[ s ], poly[ t ] );
+    t_b += b_edge;
+    
+    // Picks theorem: A = I + B/2 - 1
+    let i_verts = ( area - t_b as f64 / 2.0 + 1.0 ) as i64; // Number of internal vertices in new polygon
+    let g_overall : i64 = i_verts + t_b as i64 - b_edge as i64 - 2; 
     if i_p < i_o {
-        return t_l;
+        return (t_l, g_overall);
     }
 
+    let total_area = polygon_area(&poly);
+    let mut total_b = 0;
+    for k in 0..n {
+        let p1 = poly[k];
+        let p2 = poly[(k + 1) % n];
+        let b = grid_points_inside_edge(p1, p2) + 1;
+        total_b += b;
+    } 
+
+    let comp_area = total_area - area;
+    let comp_b = total_b - t_b + b_edge + 2;
+    let g_comp: i64 = ( comp_area - comp_b as f64 / 2.0 + 1.0 ) as i64; // Number of internal vertices in new polygon
+
+    assert!( g_comp >= 0 );
+
     let total_l = euclidean_length(&poly);
-    total_l - t_l
+    ( total_l - t_l, g_comp )
+}
+
+pub fn polygon_area(poly: &[Point2D]) -> f64 {
+    let mut area: f64 = 0.0;
+    let n = poly.len();
+    for i in 0..n {
+        let p1 = poly[i];
+        let p2 = poly[(i + 1) % n];
+        area += (p1.x as f64 * p2.y as f64) - (p2.x as f64 * p1.y as f64);
+    }
+    (area / 2.0).abs()
 }
 
 pub fn compute_good_bad_sets(ch_m: &[Point2D], l: f64) -> (GridSet, GridSet, Vec<Point2D>) {
@@ -982,3 +933,5 @@ pub fn compute_max_turn_angle(poly: &Vec<Point2D>) -> f64 {
     // Convert radians to degrees
     max_angle_rad
 }
+
+

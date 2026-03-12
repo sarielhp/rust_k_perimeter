@@ -1,4 +1,5 @@
-use crate::geom::{bound, CoordType, GridSet, Point2D};
+use  crate::point::*;
+use crate::geom::{bound, GridSet};
 use cairo::{Context, FontSlant, FontWeight, PdfSurface};
 
 fn cr_string_pdf(cr: &Context, w: f64, h: f64, text_content: &str) {
@@ -43,6 +44,7 @@ pub fn compute_perimeter(poly: &[Point2D]) -> f64 {
 }
 
 pub fn draw_polygon_with_grid(
+    dir_pdfs: &str,
     poly: &[Point2D],
     poly_circ: &[Point2D],
     poly_circ_exp: &[Point2D],
@@ -51,8 +53,7 @@ pub fn draw_polygon_with_grid(
     bad: &GridSet,
     good: &GridSet,
 ) {
-    std::fs::create_dir_all("output").unwrap_or_default();
-    let filename: String = format!("output/{}.pdf", k);
+    let filename: String = format!("{}/{:05}.pdf", dir_pdfs, k);
 
     let (min_x, max_x, _min_y_2, max_y) = bound(&[poly, poly_circ, poly_circ_exp], 3);
     let min_y = 0;
