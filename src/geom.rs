@@ -865,7 +865,7 @@ pub fn compute_good_bad_sets(ch_m: &[Point2D], l: f64) -> (GridSet, GridSet, Vec
     (good, bad, bad_ch)
 }
 
-pub fn len_longest_edge(poly: &Vec<Point2D>) -> f64 {
+pub fn len_longest_edge(poly: &[Point2D]) -> f64 {
     let n = poly.len();
     if n < 2 {
         return 0.0;
@@ -893,7 +893,7 @@ pub fn len_longest_edge(poly: &Vec<Point2D>) -> f64 {
 }
 
 /// Computes the maximum turn angle in degrees for a convex polygon.
-pub fn compute_max_turn_angle(poly: &Vec<Point2D>) -> f64 {
+pub fn compute_max_turn_angle(poly: &[Point2D]) -> f64 {
     let n = poly.len();
     if n < 3 {
         return 0.0;

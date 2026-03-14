@@ -13,3 +13,7 @@ panic = "abort"        # Removes stack unwinding code; smaller and faster, but n
 cairo-rs = { version = "0.20", features = ["pdf", "svg", "ps"] }
 num-format = "0.4.4"
 rustc-hash = "2.1.1"
+memmap2 = "0.9"
+bytemuck = { version = "1.14", features = ["derive"] }
+mmap-vec = "0.2.0"
+anyhow = "1.0.102"

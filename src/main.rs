@@ -97,7 +97,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("# Good points: {}", good.length());
     println!("# bad  points: {}", bad.length());
     
-    let (sol, ub_circle) = if queue_strategy == "perim_ng" {
+    let Ok((sol, ub_circle)) = (if queue_strategy == "perim_ng" {
         minimize_perimeter_dp::<PerimThenNgStrategy>(k as u32, &good, &bad, &bad_ch, use_cache)
     } else if queue_strategy == "ng_idx" {
         minimize_perimeter_dp::<NgThenIdxStrategy>(k as u32, &good, &bad, &bad_ch, use_cache)
@@ -111,6 +111,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         minimize_perimeter_dp::<NgThenPerimStrategy>(k as u32, &good, &bad, &bad_ch, use_cache)
     } else {
         minimize_perimeter_dp::<NgPerimDtoStrategy>(k as u32, &good, &bad, &bad_ch, use_cache)
+    }) else {
+        eprintln!("Error: The DP solver failed to initialize or write to disk.");
+        std::process::exit(1);
     };
 
     println!("k: {}", k);

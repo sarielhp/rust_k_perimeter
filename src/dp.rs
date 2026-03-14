@@ -1,6 +1,12 @@
 // dp.rs
 //mod point;
-use  crate::point::*;
+use crate::point::*;
+#[warn(unused_imports)]
+use bytemuck::{AnyBitPattern};
+use std::cmp::max;
+use std::mem;
+
+use mmap_vec::{MmapVec};
 
 use crate::geom::{
     is_all_left_turns, is_colinear, is_lefteq_turn, is_right_turn, triangle_count_new_points,
@@ -11,11 +17,12 @@ use rustc_hash::FxHashMap;
 use std::cmp::Ordering;
 use std::collections::BinaryHeap;
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[repr(C)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, AnyBitPattern)]
 pub struct DPStateKey {
-    pub dir_index: u16,
     pub loc: Point2D,
     pub n_g: u32,
+    pub dir_index: u16,
 }
 
 impl PartialOrd for DPStateKey {
@@ -33,12 +40,14 @@ impl Ord for DPStateKey {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, PartialOrd)]
+#[repr(C)]
+#[derive(Debug, Clone, Copy, PartialEq, PartialOrd, AnyBitPattern)]
+//#[derive(Debug, Clone, Copy, PartialEq, PartialOrd)]
 pub struct DPStateValue {
     pub cfg: DPStateKey,
     pub perimeter_so_far: f64,
-    pub prev_idx: usize,
-    pub handled: bool,
+    pub prev_idx: usize
+    //pub handled: bool,
 }
 
 pub fn comp_next_conf(
@@ -96,8 +105,8 @@ pub fn comp_next_conf(
     let new_cfg = DPStateKey {
         dir_index: i_v,
         loc: c,
-        n_g,
-    };
+        n_g
+        };
 
     let new_perim = perimeter_so_far + (b - c).norm();
     (true, new_cfg, new_perim)
@@ -156,6 +165,21 @@ pub fn is_store(
     true
 }
 
+#[warn(unused)]
+pub fn filter_d_all_by_n_g(d_all: &FxHashMap<DPStateKey, usize>, min_n_g: u32) -> FxHashMap<DPStateKey, usize> {
+    let original_count = d_all.len();
+    let filtered: FxHashMap<DPStateKey, usize> = d_all.iter()
+        .filter(|(key, _)| key.n_g >= min_n_g)
+        .map(|(key, value)| (*key, *value))
+        .collect();
+    let filtered_count = filtered.len();
+    println!("Filtered {} entries out of {} in the hash table.", filtered_count, original_count);
+    filtered
+}
+
+
+
+
 // Wrapper for f64 to implement Ord
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct OrderedFloat(pub f64);
@@ -184,6 +208,7 @@ pub trait QueueStrategy {
         good: &GridSet,
     ) -> Self::Key;
 }
+
 
 pub struct NgThenPerimStrategy;
 impl QueueStrategy for NgThenPerimStrategy {
@@ -343,13 +368,14 @@ pub struct QueueItem<K: Ord> {
     idx: usize,
 }
 
+
 pub fn minimize_perimeter_dp<S: QueueStrategy>(
     k: u32,
     good: &GridSet,
     bad: &GridSet,
     bad_in_ch: &Vec<Point2D>,
     use_cache: bool,
-) -> (Vec<Point2D>, f64) {
+) -> anyhow::Result<(Vec<Point2D>, f64)> { //
     let sqrt_k = (k as f64).sqrt().ceil() as u32 + 1;
     // max_angle = 3 * pi / k^(1/3)
     let max_angle = 5.0 / (k as f64).powf(1.0 / 3.0);
@@ -359,6 +385,10 @@ pub fn minimize_perimeter_dp<S: QueueStrategy>(
     let power = 19;
     let mask = (1 << power) - 1;
 
+    println!("Size of DPStateValue: {} bytes",
+        mem::size_of::<DPStateValue>() );
+    println!("Size of DPStateKey: {} bytes",
+        mem::size_of::<DPStateKey>() );
     println!("k           : {}", k);
     println!("sqrt_k      : {}", sqrt_k);
     println!("max_edge_l  : {}", max_edge_l);
@@ -372,7 +402,7 @@ pub fn minimize_perimeter_dp<S: QueueStrategy>(
     let start_key = DPStateKey {
         dir_index: 0,
         loc: Point2D::new(0, 0),
-        n_g: 1,
+        n_g: 1
     };
 
     let mut best_sol = start_key;
@@ -384,7 +414,10 @@ pub fn minimize_perimeter_dp<S: QueueStrategy>(
         idx: 0,
     });
 
-    let hint_size = 2 * (k as usize) * (k as usize);
+    let hint_size =  2*(k as usize) * (k as usize) ;
+    //let hint_size_d = 2 * (k as usize) * (k as usize) + 20 * (k as usize) + 1000;
+    //let hint_size_s = (k as usize) + (k as usize) * (k as usize) / 8;
+    let mut threshold = (k as usize) * 100;
 
     println!(
         "hint_size   : {}",
@@ -394,13 +427,25 @@ pub fn minimize_perimeter_dp<S: QueueStrategy>(
     let mut d_all = FxHashMap::default();
     //let mut d_all = FxHashMap::with_capacity( hint_size );
     let mut all_left_turns_cache: FxHashMap<(Point2D, Point2D), bool> = FxHashMap::default();
-    d_all.reserve(hint_size);
-    let mut dp_vals = Vec::with_capacity(hint_size);
+    println!( "Tring to resize d_all.. {}", 2*threshold );
+    d_all.reserve( 2 * threshold );
+
+
+    //let byte_size = hint_size * std::mem::size_of::<DPStateValue>();
+    // 1. Open/Create the file and set its size
+    
+    println!( "Trying to allocate dp_vals... " );
+    //let mut dp_vals = MmapVec::<DPStateValue>::new();
+    let mut dp_vals = MmapVec::<DPStateValue>::with_capacity( hint_size )?;
+    println!( "Path of file: {}", dp_vals.path().display() );
+    //let mut dp_vals: MmapVec<> = config.create()?;
+
+    //let mut dp_vals = Vec::with_capacity(hint_size);
     let start_val = DPStateValue {
         cfg: start_key,
         perimeter_so_far: 0.0,
-        prev_idx: 0,
-        handled: false,
+        prev_idx: 0
+        //handled: false,
     };
     if let Err(_) = d_all.try_reserve(1) {
         let msg = "Error: Out of memory when attempting to insert into hash table";
@@ -409,27 +454,36 @@ pub fn minimize_perimeter_dp<S: QueueStrategy>(
         std::process::exit(1);
     }
     d_all.insert(start_key, 0);
-    dp_vals.push(start_val);
+    dp_vals.push(start_val)?;
 
     let mut conf_count: i64 = 0;
     let mut conf_useless_count: i64 = 0;
     while let Some(QueueItem {
         key: _,
-        n_g: _,
+        n_g: curr_n_g,
         idx: popped_idx,
     }) = pq.pop()
     {
+
+        if d_all.len() > threshold {
+            let min_n_g = curr_n_g;
+            let new_d_all = filter_d_all_by_n_g(&d_all, min_n_g);
+            d_all = new_d_all;
+            threshold = max( threshold, 3 * d_all.len() / 2 );
+        }
+
         let mut store_count = 0;
         conf_count += 1;
 
         let cfg_idx = popped_idx;
         let (cfg, perimeter_so_far) = {
             let val = &mut dp_vals[cfg_idx];
+            /*
             if val.handled {
                 println!("HANDLED???");
                 continue;
             }
-            val.handled = true;
+            val.handled = true;*/
             (val.cfg, val.perimeter_so_far)
         };
 
@@ -522,8 +576,8 @@ pub fn minimize_perimeter_dp<S: QueueStrategy>(
             let next_val = DPStateValue {
                 cfg: next_cfg,
                 perimeter_so_far: new_perim,
-                prev_idx: cfg_idx,
-                handled: false,
+                prev_idx: cfg_idx//,
+                //handled: false,
             };
             let push_idx;
             if let Some(idx) = existing_idx {
@@ -531,7 +585,7 @@ pub fn minimize_perimeter_dp<S: QueueStrategy>(
                 push_idx = idx;
             } else {
                 let idx = dp_vals.len();
-                dp_vals.push(next_val);
+                dp_vals.push(next_val)?;
                 if let Err(_) = d_all.try_reserve(1) {
                     let msg = "Error: Out of memory when attempting to insert into hash table";
                     println!("{}", msg);
@@ -567,7 +621,7 @@ pub fn minimize_perimeter_dp<S: QueueStrategy>(
     println!("# of configurations generated: {}", conf_count);
     println!("# of dead-end  configurations: {}", conf_useless_count);
     let sol = extract_solution(&d_all, &dp_vals, best_sol);
-    (sol, ub_circle)
+    Ok( (sol, ub_circle) )
 }
 
 // End of file
