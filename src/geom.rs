@@ -534,6 +534,7 @@ pub fn bound(polys: &[&[Point2D]], expand: i32) -> (CoordType, CoordType, CoordT
     )
 }
 
+#[derive(Debug)]
 pub struct GridSet {
     pub min_x: CoordType,
     pub max_x: CoordType,
