@@ -2,15 +2,15 @@ use crate::point::*;
 
 use std::{
     cmp::{max, min},
-//    collections::HashMap,
-  //  ops::{Add, Div, Mul, Sub},
+    //    collections::HashMap,
+    //  ops::{Add, Div, Mul, Sub},
 };
-
 
 pub fn vtrans(p: &[Point2D], v: Point2D) -> Vec<Point2D> {
     p.iter().map(|&pt| pt + v).collect()
 }
 
+#[allow(dead_code)]
 pub fn is_lefteq_turn(a: Point2D, b: Point2D, c: Point2D) -> bool {
     (b.x - a.x) * (c.y - a.y) >= (b.y - a.y) * (c.x - a.x)
 }
@@ -51,13 +51,21 @@ pub fn euclidean_length(sol: &[Point2D]) -> f64 {
     if sol.is_empty() {
         return 0.0;
     }
-    let mut l = (sol.first().unwrap_or_else(|| {
-        eprintln!("Error: sol is empty in euclidean_length");
-        std::process::exit(1);
-    }).clone() - sol.last().unwrap_or_else(|| {
-        eprintln!("Error: sol is empty in euclidean_length");
-        std::process::exit(1);
-    }).clone()).norm();
+    let mut l = (sol
+        .first()
+        .unwrap_or_else(|| {
+            eprintln!("Error: sol is empty in euclidean_length");
+            std::process::exit(1);
+        })
+        .clone()
+        - sol
+            .last()
+            .unwrap_or_else(|| {
+                eprintln!("Error: sol is empty in euclidean_length");
+                std::process::exit(1);
+            })
+            .clone())
+    .norm();
     for i in 1..sol.len() {
         l += (sol[i - 1] - sol[i]).norm();
     }
@@ -290,10 +298,12 @@ pub fn ch_disk_origin(k: usize, f_expand: bool) -> Vec<Point2D> {
         }
     }
     assert!(v.len() > k);
-    v.sort_by(|a, b| a.norm_sq().partial_cmp(&b.norm_sq()).unwrap_or_else(|| {
-        eprintln!("Error: NaN encountered in partial_cmp in ch_disk_origin");
-        std::process::exit(1);
-    }));
+    v.sort_by(|a, b| {
+        a.norm_sq().partial_cmp(&b.norm_sq()).unwrap_or_else(|| {
+            eprintln!("Error: NaN encountered in partial_cmp in ch_disk_origin");
+            std::process::exit(1);
+        })
+    });
     v.truncate(k);
     //println!("v_len: {}", v.len());
 
@@ -448,12 +458,14 @@ pub fn triangle_count_new_points(a: Point2D, b: Point2D, c: Point2D) -> (u32, u3
     (tri_i_new as u32, tri_b_new as u32)
 }
 
+#[allow(dead_code)]
 pub fn angle_between(p1: Point2D, p2: Point2D) -> f64 {
     let dot_prod = (p1.x * p2.x + p1.y * p2.y) as f64;
     let det_prod = (p1.x * p2.y - p1.y * p2.x) as f64;
     det_prod.atan2(dot_prod)
 }
 
+#[allow(dead_code)]
 pub fn comp_stop_indexes(v: &[Point2D], max_angle: f64) -> Vec<usize> {
     let mut stops = Vec::new();
     let dir_end = v.len() - 1;
@@ -545,7 +557,7 @@ pub struct GridSet {
     width: usize,
     data: Vec<bool>,
     dto: Vec<f64>, // Distance to origin
-    point_id: Vec<usize>
+    point_id: Vec<usize>,
     pub points: Vec<Point2D>,
     //pub point_to_id: HashMap<Point2D, usize>,
     dto_g: Vec<i64>, // Number of grid points inside distance to origin
@@ -555,21 +567,21 @@ impl GridSet {
     pub fn new(min_x: CoordType, max_x: CoordType, min_y: CoordType, max_y: CoordType) -> Self {
         let width = (max_x - min_x + 1).max(0) as usize;
         let height = (max_y - min_y + 1).max(0) as usize;
-        
+
         let _size = width * height;
-        println!( "Size: {}", _size );
+        println!("Size: {}", _size);
         Self {
             min_x,
             max_x,
             min_y,
             max_y,
-            _size, 
+            _size,
             width,
             points: Vec::new(),
             // point_to_id: HashMap::new(),
             data: vec![false; _size],
             dto: vec![-1.0; _size],
-            point_id: vec![-1; _size],
+            point_id: vec![usize::MAX; _size],
             dto_g: vec![0; _size],
         }
     }
@@ -594,18 +606,17 @@ impl GridSet {
         }
     }
 
-    fn  get_index( &self, p: Point2D ) -> usize {
+    fn get_index(&self, p: Point2D) -> usize {
         if p.x >= self.min_x && p.x <= self.max_x && p.y >= self.min_y && p.y <= self.max_y {
             let idx = (p.y - self.min_y) as usize * self.width + (p.x - self.min_x) as usize;
             idx
         } else {
             panic!("Point is outside the grid");
-            0
         }
     }
 
     pub fn insert_val(&mut self, p: Point2D, val: f64, g: i64) {
-        let idx = self.get_index( p );
+        let idx = self.get_index(p);
         self.dto[idx] = val;
         self.dto_g[idx] = g;
     }
@@ -629,6 +640,35 @@ impl GridSet {
         }
     }
 
+    pub fn compute_points(&mut self) {
+        self.points.clear();
+        //self.point_id.clear();
+        for y in self.min_y..=self.max_y {
+            for x in self.min_x..=self.max_x {
+                let p = Point2D::new(x, y);
+                if self.contains(&p) {
+                    let id = self.points.len();
+                    self.points.push(p);
+                    let index = self.get_index(p);
+                    self.point_id[index] = id;
+                }
+            }
+        }
+    }
+
+    pub fn get_point_by_id(&self, id: usize) -> &Point2D {
+        // self.points.get(id)
+        &(self.points[id])
+    }
+
+    pub fn get_point_id(&self, p: Point2D) -> usize {
+        self.point_id[self.get_index(p)]
+    }
+
+    pub fn num_points(&self) -> usize {
+        self.points.len()
+    }
+
     pub fn fill_dist_to_origin(&mut self, bad_ch: &Vec<Point2D>) {
         for y in self.min_y..=self.max_y {
             if y < 0 {
@@ -640,29 +680,7 @@ impl GridSet {
                     continue;
                 }
 
-    pub fn compute_points(&mut self) {
-        self.points.clear();
-        self.point_to_id.clear();
-        for y in self.min_y..=self.max_y {
-            for x in self.min_x..=self.max_x {
-                let p = Point2D::new(x, y);
-                if self.contains(&p) {
-                    let id = self.points.len();
-                    self.points.push(p);
-                    self.point_id[ self.get_index(p) ] = id;
-                }
-            }
-        }
-    }
-
-    pub fn get_id(&self, p: Point2D) -> usize {
-        self.point_id[ self.get_index(p) ]
-    }
-
-    pub fn num_points(&self) -> usize {
-        self.points.len()
-    }
-                let (l,g) = distance_to_origin(bad_ch, p);
+                let (l, g) = distance_to_origin(bad_ch, p);
                 self.insert_val(p, l, g);
             }
         }
@@ -780,20 +798,14 @@ pub fn distance_to_origin(bad_ch: &[Point2D], p: Point2D) -> (f64, i64) {
     assert!(is_left_turn(poly[0], poly[1], poly[2]));
 
     // This will return the index or panic with the message provided
-    let i_o = poly
-        .iter()
-        .position(|&x| x == origin)
-        .unwrap_or_else(|| {
-            eprintln!("Error: Origin not found in CH! in distance_to_origin");
-            std::process::exit(1);
-        });
-    let i_p = poly
-        .iter()
-        .position(|&x| x == p)
-        .unwrap_or_else(|| {
-            eprintln!("Error: p not found in CH! in distance_to_origin");
-            std::process::exit(1);
-        });
+    let i_o = poly.iter().position(|&x| x == origin).unwrap_or_else(|| {
+        eprintln!("Error: Origin not found in CH! in distance_to_origin");
+        std::process::exit(1);
+    });
+    let i_p = poly.iter().position(|&x| x == p).unwrap_or_else(|| {
+        eprintln!("Error: p not found in CH! in distance_to_origin");
+        std::process::exit(1);
+    });
 
     let s = min(i_o, i_p);
     let t = max(i_o, i_p);
@@ -803,15 +815,15 @@ pub fn distance_to_origin(bad_ch: &[Point2D], p: Point2D) -> (f64, i64) {
     let mut area = 0.0;
     for k in s..t {
         t_l += d_y(poly[k], poly[k + 1]);
-        t_b += grid_points_inside_edge( poly[ k ], poly[ k + 1 ] ) + 1;
+        t_b += grid_points_inside_edge(poly[k], poly[k + 1]) + 1;
         area += triangle_area(origin, poly[k], poly[k + 1]);
     }
-    let b_edge = grid_points_inside_edge( poly[ s ], poly[ t ] );
+    let b_edge = grid_points_inside_edge(poly[s], poly[t]);
     t_b += b_edge;
-    
+
     // Picks theorem: A = I + B/2 - 1
-    let i_verts = ( area - t_b as f64 / 2.0 + 1.0 ) as i64; // Number of internal vertices in new polygon
-    let g_overall : i64 = i_verts + t_b as i64 - b_edge as i64 - 2; 
+    let i_verts = (area - t_b as f64 / 2.0 + 1.0) as i64; // Number of internal vertices in new polygon
+    let g_overall: i64 = i_verts + t_b as i64 - b_edge as i64 - 2;
     if i_p < i_o {
         return (t_l, g_overall);
     }
@@ -823,16 +835,16 @@ pub fn distance_to_origin(bad_ch: &[Point2D], p: Point2D) -> (f64, i64) {
         let p2 = poly[(k + 1) % n];
         let b = grid_points_inside_edge(p1, p2) + 1;
         total_b += b;
-    } 
+    }
 
     let comp_area = total_area - area;
     let comp_b = total_b - t_b + b_edge + 2;
-    let g_comp: i64 = ( comp_area - comp_b as f64 / 2.0 + 1.0 ) as i64; // Number of internal vertices in new polygon
+    let g_comp: i64 = (comp_area - comp_b as f64 / 2.0 + 1.0) as i64; // Number of internal vertices in new polygon
 
-    assert!( g_comp >= 0 );
+    assert!(g_comp >= 0);
 
     let total_l = euclidean_length(&poly);
-    ( total_l - t_l, g_comp )
+    (total_l - t_l, g_comp)
 }
 
 pub fn polygon_area(poly: &[Point2D]) -> f64 {
@@ -900,6 +912,7 @@ pub fn compute_good_bad_sets(ch_m: &[Point2D], l: f64) -> (GridSet, GridSet, Vec
         }
     }
     let bad_ch = convex_hull(&bad_in);
+    good.compute_points();
 
     (good, bad, bad_ch)
 }
@@ -977,22 +990,34 @@ pub struct VisibilityGraph {
     pub adjacency_list: Vec<Vec<usize>>,
 }
 
-pub fn build_visibility_graph(good: &GridSet, bad_ch: &[Point2D]) -> VisibilityGraph {
+pub fn build_visibility_graph(
+    good: &GridSet,
+    bad_ch: &[Point2D],
+    dirs: &Vec<Point2D>,
+) -> VisibilityGraph {
     let n = good.num_points();
     let mut adjacency_list = vec![vec![]; n];
+    let n_dirs = dirs.len();
 
+    let origin = Point2D { x: 0, y: 0 };
     for i in 0..n {
-        for j in 0..n {
-            if i == j { continue; }
-            let p1 = good.points[i];
-            let p2 = good.points[j];
-            if !does_segment_intersect_polygon(bad_ch, p1, p2) {
-                adjacency_list[i].push(j);
+        let p = good.points[i];
+        for j in 0..n_dirs {
+            let q_dir = dirs[j];
+            let q = p + q_dir;
+            if !good.contains(&q) {
+                continue;
             }
+            if is_right_turn(origin, p, q) {
+                continue;
+            }
+            if does_segment_intersect_polygon(bad_ch, p, q) {
+                continue;
+            }
+            let q_id = good.get_point_id(q);
+            adjacency_list[i].push(q_id);
         }
     }
 
     VisibilityGraph { adjacency_list }
 }
-
-

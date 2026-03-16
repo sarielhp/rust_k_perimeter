@@ -1,23 +1,26 @@
 mod dp;
 mod draw;
+mod geom;
 mod point;
 mod polygon;
-mod geom;
 
-
-use dp::{minimize_perimeter_dp, NgThenPerimStrategy, PerimThenNgStrategy, NgThenIdxStrategy, PerimThenIdxStrategy, NgPerimDtoStrategy, PerimNgDtogStrategy, NgDtoStrategy};
-use draw::{compute_perimeter, draw_polygon_with_grid};
-use point::*;
-use geom::{
-    ch_disk_origin, compute_good_bad_sets, compute_max_turn_angle, len_longest_edge, vtrans,
+use dp::{
+    max_edge_length, minimize_perimeter_dp, NgDtoStrategy, NgPerimDtoStrategy, NgThenIdxStrategy,
+    NgThenPerimStrategy, PerimNgDtogStrategy, PerimThenIdxStrategy, PerimThenNgStrategy,
 };
+use draw::{compute_perimeter, draw_polygon_with_grid};
+use geom::{
+    build_visibility_graph, ch_disk_origin, compute_good_bad_sets, compute_max_turn_angle,
+    len_longest_edge, vtrans,
+};
+use point::*;
 use polygon::*;
 
 use std::env;
+use std::fmt::Write as StrWrite;
 use std::fs::File;
 use std::io::Write;
 use std::time::Instant;
-use std::fmt::Write as StrWrite;
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let start = Instant::now();
@@ -27,7 +30,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         println!();
         println!("Arguments:");
         println!("  [k]               The number of grid points the polygon should enclose.");
-        println!("  --no-cache        Disable the caching for the `is_all_left_turns` function call.");
+        println!(
+            "  --no-cache        Disable the caching for the `is_all_left_turns` function call."
+        );
         println!("  --queue=strategy  Select the priority queue ordering strategy.");
         println!();
         println!("Available queue strategies:");
@@ -37,19 +42,20 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         println!("  perim_ng_dtog           Sort by perimeter (ascending), then (n_g + DTO_G).");
         println!("  ng_dto                  Sort by n_g (ascending), then DTO (ascending).");
         println!("  ng_idx                  Sort by n_g (ascending), then queue insertion index.");
-        println!("  perim_idx               Sort by perimeter (ascending), then queue insertion index.");
+        println!(
+            "  perim_idx               Sort by perimeter (ascending), then queue insertion index."
+        );
         std::process::exit(1);
     }
 
-    let  dir_pdfs = "output/pdfs";
-    let  dir_summary = "output/summary";
-    let  dir_polys = "output/polys";
-    
+    let dir_pdfs = "output/pdfs";
+    let dir_summary = "output/summary";
+    let dir_polys = "output/polys";
+
     std::fs::create_dir_all("output").unwrap_or_default();
-    std::fs::create_dir_all( dir_pdfs ).unwrap_or_default();
-    std::fs::create_dir_all( dir_polys ).unwrap_or_default();
-    std::fs::create_dir_all( dir_summary ).unwrap_or_default();
-    
+    std::fs::create_dir_all(dir_pdfs).unwrap_or_default();
+    std::fs::create_dir_all(dir_polys).unwrap_or_default();
+    std::fs::create_dir_all(dir_summary).unwrap_or_default();
 
     let use_cache = !args.contains(&String::from("--no-cache"));
 
@@ -85,6 +91,12 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let (mut good, bad, bad_ch) = compute_good_bad_sets(&ch_m_exp, l as f64);
 
+    let max_edge_l = max_edge_length(k as u32);
+    let dirs = crate::geom::generate_primitive_vectors(max_edge_l);
+
+    println!("Building visibility graph...");
+    let vg = build_visibility_graph(&good, &bad_ch, &dirs);
+
     println!("Computing distance of good points to the origin...");
     good.fill_dist_to_origin(&bad_ch);
     println!("   ...done");
@@ -96,21 +108,23 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     writeln!(log, "# bad  points: {}", bad.length())?;
     println!("# Good points: {}", good.length());
     println!("# bad  points: {}", bad.length());
-    
+
     let Ok((sol, ub_circle)) = (if queue_strategy == "perim_ng" {
-        minimize_perimeter_dp::<PerimThenNgStrategy>(k as u32, &good, &bad, &bad_ch, use_cache)
+        minimize_perimeter_dp::<PerimThenNgStrategy>(k as u32, &good, &bad, &bad_ch, use_cache, &vg)
     } else if queue_strategy == "ng_idx" {
-        minimize_perimeter_dp::<NgThenIdxStrategy>(k as u32, &good, &bad, &bad_ch, use_cache)
+        minimize_perimeter_dp::<NgThenIdxStrategy>(k as u32, &good, &bad, &bad_ch, use_cache, &vg)
     } else if queue_strategy == "perim_idx" {
-        minimize_perimeter_dp::<PerimThenIdxStrategy>(k as u32, &good, &bad, &bad_ch, use_cache)
+        minimize_perimeter_dp::<PerimThenIdxStrategy>(
+            k as u32, &good, &bad, &bad_ch, use_cache, &vg,
+        )
     } else if queue_strategy == "perim_ng_dtog" {
-        minimize_perimeter_dp::<PerimNgDtogStrategy>(k as u32, &good, &bad, &bad_ch, use_cache)
+        minimize_perimeter_dp::<PerimNgDtogStrategy>(k as u32, &good, &bad, &bad_ch, use_cache, &vg)
     } else if queue_strategy == "ng_dto" {
-        minimize_perimeter_dp::<NgDtoStrategy>(k as u32, &good, &bad, &bad_ch, use_cache)
+        minimize_perimeter_dp::<NgDtoStrategy>(k as u32, &good, &bad, &bad_ch, use_cache, &vg)
     } else if queue_strategy == "ng_perim" {
-        minimize_perimeter_dp::<NgThenPerimStrategy>(k as u32, &good, &bad, &bad_ch, use_cache)
+        minimize_perimeter_dp::<NgThenPerimStrategy>(k as u32, &good, &bad, &bad_ch, use_cache, &vg)
     } else {
-        minimize_perimeter_dp::<NgPerimDtoStrategy>(k as u32, &good, &bad, &bad_ch, use_cache)
+        minimize_perimeter_dp::<NgPerimDtoStrategy>(k as u32, &good, &bad, &bad_ch, use_cache, &vg)
     }) else {
         eprintln!("Error: The DP solver failed to initialize or write to disk.");
         std::process::exit(1);
@@ -119,7 +133,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("k: {}", k);
 
     let perimeter = compute_perimeter(&sol);
-    draw_polygon_with_grid( dir_pdfs, &sol, &ch_m, &ch_m_exp, k, ub_circle, &bad, &good);
+    draw_polygon_with_grid(dir_pdfs, &sol, &ch_m, &ch_m_exp, k, ub_circle, &bad, &good);
     let ch_m_perimeter = compute_perimeter(&ch_m);
     writeln!(log, "# Perimeter        : {}", perimeter)?;
     writeln!(log, "# circle perimeter : {}", ch_m_perimeter)?;
@@ -148,11 +162,11 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("Running time in seconds: {}", duration.as_secs());
 
     let filename_poly: String = format!("{}/{:05}_poly.txt", dir_polys, k);
-    save_polygon( &filename_poly, &sol, Some( &log ) )?;
+    save_polygon(&filename_poly, &sol, Some(&log))?;
 
     let filename_log: String = format!("{}/{:05}_summmary.txt", dir_summary, k);
     let mut log_fl = File::create(filename_log)?;
-    writeln!( log_fl, "{}", &log )?;
+    writeln!(log_fl, "{}", &log)?;
 
     Ok(())
 }

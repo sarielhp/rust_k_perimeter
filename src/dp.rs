@@ -2,15 +2,21 @@
 //mod point;
 use crate::point::*;
 #[warn(unused_imports)]
-use bytemuck::{AnyBitPattern};
+use bytemuck::AnyBitPattern;
 use std::cmp::max;
 use std::mem;
 
-use mmap_vec::{MmapVec};
+use mmap_vec::MmapVec;
 
 use crate::geom::{
-    is_all_left_turns, is_colinear, is_lefteq_turn, is_right_turn, triangle_count_new_points,
+    is_all_left_turns,
+    //is_all_left_turns,
+    is_colinear,
+    //is_lefteq_turn,
+    is_right_turn,
+    triangle_count_new_points,
     GridSet,
+    VisibilityGraph,
 };
 use num_format::{Locale, ToFormattedString};
 use rustc_hash::FxHashMap;
@@ -21,7 +27,7 @@ use std::collections::BinaryHeap;
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, AnyBitPattern)]
 pub struct DPStateKey {
     pub loc: Point2D,
-    pub n_g: u32
+    pub n_g: u32,
 }
 
 impl PartialOrd for DPStateKey {
@@ -32,10 +38,7 @@ impl PartialOrd for DPStateKey {
 
 impl Ord for DPStateKey {
     fn cmp(&self, other: &Self) -> Ordering {
-        self.n_g
-            .cmp(&other.n_g)
-            .then(self.loc.cmp(&other.loc))
-            .then(self.dir_index.cmp(&other.dir_index))
+        self.n_g.cmp(&other.n_g).then(self.loc.cmp(&other.loc))
     }
 }
 
@@ -45,25 +48,22 @@ impl Ord for DPStateKey {
 pub struct DPStateValue {
     pub cfg: DPStateKey,
     pub perimeter_so_far: f64,
-    pub prev_idx: usize
-    //pub handled: bool,
+    pub prev_idx: usize, //pub handled: bool,
 }
 
 pub fn comp_next_conf<K: Ord>(
     ctx: &DPContext<K>,
     cfg: &DPStateKey,
     perimeter_so_far: f64,
-    i_v: u16,
+    p_next: Point2D,
 ) -> (bool, DPStateKey, f64) {
-    let a = cfg.loc - ctx.dirs[cfg.dir_index as usize];
+    //let a = cfg.loc - ctx.dirs[cfg.dir_index as usize];
     let b = cfg.loc;
-    let c = cfg.loc + ctx.dirs[i_v as usize];
+    let c = p_next;
 
     let origin = Point2D::new(0, 0);
 
-    if !is_lefteq_turn(a, b, c)
-        || (c.y < 0)
-        || (a == c)
+    if (c.y < 0)
         || c.is_zero()
         || (c.x as i64) > (ctx.sqrt_k as i64)
         || (c.y as i64) > ((2 * ctx.sqrt_k) as i64)
@@ -81,9 +81,9 @@ pub fn comp_next_conf<K: Ord>(
         }
     }
 
-    let &v = &ctx.dirs[i_v as usize];
+    //    let &v = &ctx.dirs[i_v as usize];
     assert!(b != c);
-    assert!(v.x != 0 || v.y != 0);
+    //  assert!(v.x != 0 || v.y != 0);
 
     let (tri_i_new, tri_b_new) = triangle_count_new_points(origin, b, c);
 
@@ -98,11 +98,7 @@ pub fn comp_next_conf<K: Ord>(
         return (false, *cfg, -1.0);
     }
 
-    let new_cfg = DPStateKey {
-        dir_index: i_v,
-        loc: c,
-        n_g
-        };
+    let new_cfg = DPStateKey { loc: c, n_g };
 
     let new_perim = perimeter_so_far + (b - c).norm();
     (true, new_cfg, new_perim)
@@ -134,11 +130,7 @@ pub fn extract_solution<K: Ord>(ctx: &DPContext<K>) -> Vec<Point2D> {
     out
 }
 
-pub fn is_store<K: Ord>(
-    ctx: &DPContext<K>,
-    next_cfg: &DPStateKey,
-    new_perim: f64,
-) -> bool {
+pub fn is_store<K: Ord>(ctx: &DPContext<K>, next_cfg: &DPStateKey, new_perim: f64) -> bool {
     if new_perim > *ctx.opt_perim {
         return false;
     }
@@ -159,9 +151,11 @@ pub fn filter_d_all_by_n_g<K: Ord>(ctx: &mut DPContext<K>, min_n_g: u32) {
     let original_count = ctx.d_all.len();
     ctx.d_all.retain(|key, _| key.n_g >= min_n_g);
     let filtered_count = ctx.d_all.len();
-    println!("Filtered {} entries out of {} in the hash table.", filtered_count, original_count);
+    println!(
+        "Filtered {} entries out of {} in the hash table.",
+        filtered_count, original_count
+    );
 }
-
 
 // Wrapper for f64 to implement Ord
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -191,7 +185,6 @@ pub trait QueueStrategy {
         good: &GridSet,
     ) -> Self::Key;
 }
-
 
 pub struct NgThenPerimStrategy;
 impl QueueStrategy for NgThenPerimStrategy {
@@ -360,8 +353,7 @@ pub struct DPContext<'a, K: Ord> {
     pub opt_perim: &'a mut f64,
     pub best_sol: &'a mut DPStateKey,
     pub all_left_turns_cache: &'a mut FxHashMap<(Point2D, Point2D), bool>,
-    pub dirs: &'a Vec<Point2D>,
-    pub stops: &'a Vec<usize>,
+    //pub dirs: &'a Vec<Point2D>,
     pub bad: &'a GridSet,
     pub bad_in_ch: &'a Vec<Point2D>,
     pub use_cache: bool,
@@ -369,9 +361,10 @@ pub struct DPContext<'a, K: Ord> {
     pub sqrt_k: u32,
     pub good: &'a GridSet,
     pub mask: u32,
+    pub vg: &'a VisibilityGraph,
 }
 
-fn process_configuration<S: QueueStrategy>(ctx: &mut DPContext<S::Key>, cfg_idx: usize ) {
+fn process_configuration<S: QueueStrategy>(ctx: &mut DPContext<S::Key>, cfg_idx: usize) {
     let mut store_count = 0;
     *ctx.conf_count += 1;
 
@@ -394,19 +387,20 @@ fn process_configuration<S: QueueStrategy>(ctx: &mut DPContext<S::Key>, cfg_idx:
             ctx.d_all.len().to_formatted_string(&Locale::en)
         );
     }
-    let dir_start = cfg.dir_index;
+    //let _prev_dir = ctx.dirs[dir_start as usize];
 
-    let dir_end = ctx.stops[dir_start as usize];
-    let _prev_dir = ctx.dirs[dir_start as usize];
+    let loc_id = ctx.good.get_point_id(cfg.loc);
+    let nbrs = &ctx.vg.adjacency_list[loc_id];
 
-    for dir_i in (dir_start as usize)..=dir_end {
-        let v = ctx.dirs[dir_i];
+    for id_nbr in nbrs.iter().copied() {
+        let p_next: Point2D = ctx.good.get_point_by_id(id_nbr).clone();
+        //let v = ctx.dirs[dir_i];
 
-        if cfg.loc.y == 0 && v.y <= 0 {
+        if cfg.loc.y == 0 && p_next.y <= 0 {
             continue;
         }
 
-        let p_next = cfg.loc + v;
+        // let p_next = cfg.loc + v;
         if ctx.bad.contains(&p_next) {
             continue;
         }
@@ -434,12 +428,7 @@ fn process_configuration<S: QueueStrategy>(ctx: &mut DPContext<S::Key>, cfg_idx:
             continue;
         }
 
-        let (f_valid, next_cfg, new_perim) = comp_next_conf(
-            ctx,
-            &cfg,
-            perimeter_so_far,
-            dir_i as u16,
-        );
+        let (f_valid, next_cfg, new_perim) = comp_next_conf(ctx, &cfg, perimeter_so_far, p_next);
         if !f_valid {
             continue;
         }
@@ -503,27 +492,32 @@ fn process_configuration<S: QueueStrategy>(ctx: &mut DPContext<S::Key>, cfg_idx:
     }
 }
 
-
+pub fn max_edge_length(k: u32) -> u32 {
+    (k as f64).powf(1.0 / 3.0).round() as u32 + 1
+}
 pub fn minimize_perimeter_dp<S: QueueStrategy>(
     k: u32,
     good: &GridSet,
     bad: &GridSet,
     bad_in_ch: &Vec<Point2D>,
     use_cache: bool,
-) -> anyhow::Result<(Vec<Point2D>, f64)> { //
+    vg: &VisibilityGraph,
+) -> anyhow::Result<(Vec<Point2D>, f64)> {
+    //
     let sqrt_k = (k as f64).sqrt().ceil() as u32 + 1;
     // max_angle = 3 * pi / k^(1/3)
     let max_angle = 5.0 / (k as f64).powf(1.0 / 3.0);
     let ub_circle = 2.0 * (std::f64::consts::PI * (k as f64)).sqrt();
     let sq_perim = (4 * sqrt_k + 6) as f64;
-    let max_edge_l: u32 = (k as f64).powf(1.0 / 3.0).round() as u32 + 1;
+    let max_edge_l: u32 = max_edge_length(k);
     let power = 19;
     let mask = (1 << power) - 1;
 
-    println!("Size of DPStateValue: {} bytes",
-        mem::size_of::<DPStateValue>() );
-    println!("Size of DPStateKey: {} bytes",
-        mem::size_of::<DPStateKey>() );
+    println!(
+        "Size of DPStateValue: {} bytes",
+        mem::size_of::<DPStateValue>()
+    );
+    println!("Size of DPStateKey: {} bytes", mem::size_of::<DPStateKey>());
     println!("k           : {}", k);
     println!("sqrt_k      : {}", sqrt_k);
     println!("max_edge_l  : {}", max_edge_l);
@@ -531,13 +525,11 @@ pub fn minimize_perimeter_dp<S: QueueStrategy>(
 
     let mut opt_perim = ub_circle.min(sq_perim);
 
-    let dirs = crate::geom::generate_primitive_vectors(max_edge_l);
-    let stops = crate::geom::comp_stop_indexes(&dirs, max_angle);
+    //let dirs = crate::geom::generate_primitive_vectors(max_edge_l);
 
     let start_key = DPStateKey {
-        dir_index: 0,
         loc: Point2D::new(0, 0),
-        n_g: 1
+        n_g: 1,
     };
 
     let mut best_sol = start_key;
@@ -549,7 +541,7 @@ pub fn minimize_perimeter_dp<S: QueueStrategy>(
         idx: 0,
     });
 
-    let hint_size =  2*(k as usize) * (k as usize) ;
+    let hint_size = 2 * (k as usize) * (k as usize);
     //let hint_size_d = 2 * (k as usize) * (k as usize) + 20 * (k as usize) + 1000;
     //let hint_size_s = (k as usize) + (k as usize) * (k as usize) / 8;
     let mut threshold = (k as usize) * 100;
@@ -562,25 +554,23 @@ pub fn minimize_perimeter_dp<S: QueueStrategy>(
     let mut d_all = FxHashMap::default();
     //let mut d_all = FxHashMap::with_capacity( hint_size );
     let mut all_left_turns_cache: FxHashMap<(Point2D, Point2D), bool> = FxHashMap::default();
-    println!( "Tring to resize d_all.. {}", 2*threshold );
-    d_all.reserve( 2 * threshold );
-
+    println!("Tring to resize d_all.. {}", 2 * threshold);
+    d_all.reserve(2 * threshold);
 
     //let byte_size = hint_size * std::mem::size_of::<DPStateValue>();
     // 1. Open/Create the file and set its size
-    
-    println!( "Trying to allocate dp_vals... " );
+
+    println!("Trying to allocate dp_vals... ");
     //let mut dp_vals = MmapVec::<DPStateValue>::new();
-    let mut dp_vals = MmapVec::<DPStateValue>::with_capacity( hint_size )?;
-    println!( "Path of file: {}", dp_vals.path().display() );
+    let mut dp_vals = MmapVec::<DPStateValue>::with_capacity(hint_size)?;
+    println!("Path of file: {}", dp_vals.path().display());
     //let mut dp_vals: MmapVec<> = config.create()?;
 
     //let mut dp_vals = Vec::with_capacity(hint_size);
     let start_val = DPStateValue {
         cfg: start_key,
         perimeter_so_far: 0.0,
-        prev_idx: 0
-        //handled: false,
+        prev_idx: 0, //handled: false,
     };
     if let Err(_) = d_all.try_reserve(1) {
         let msg = "Error: Out of memory when attempting to insert into hash table";
@@ -593,66 +583,68 @@ pub fn minimize_perimeter_dp<S: QueueStrategy>(
 
     let mut conf_count: i64 = 0;
     let mut conf_useless_count: i64 = 0;
-        let mut ctx = DPContext {
-            conf_count: &mut conf_count,
-            conf_useless_count: &mut conf_useless_count,
-            d_all: &mut d_all,
-            dp_vals: &mut dp_vals,
-            pq: &mut pq,
-            opt_perim: &mut opt_perim,
-            best_sol: &mut best_sol,
-            all_left_turns_cache: &mut all_left_turns_cache,
-            dirs: &dirs,
-            stops: &stops,
-            bad,
-            bad_in_ch,
-            use_cache,
-            k,
-            sqrt_k,
-            good,
-            mask,
-        };
-        loop {
-            let item = ctx.pq.pop();
-            if item.is_none() { break; }
-            let QueueItem {
-                key: _,
-                n_g: curr_n_g,
-                idx: popped_idx,
-            } = item.unwrap();
+    let mut ctx = DPContext {
+        conf_count: &mut conf_count,
+        conf_useless_count: &mut conf_useless_count,
+        d_all: &mut d_all,
+        dp_vals: &mut dp_vals,
+        pq: &mut pq,
+        opt_perim: &mut opt_perim,
+        best_sol: &mut best_sol,
+        all_left_turns_cache: &mut all_left_turns_cache,
+        //dirs: &dirs,
+        bad,
+        bad_in_ch,
+        use_cache,
+        k,
+        sqrt_k,
+        good,
+        mask,
+        vg,
+    };
+    loop {
+        let item = ctx.pq.pop();
+        if item.is_none() {
+            break;
+        }
+        let QueueItem {
+            key: _,
+            n_g: curr_n_g,
+            idx: popped_idx,
+        } = item.unwrap();
 
-            let mut ids: Vec<usize> = Vec::new();
-            ids.push( popped_idx );
+        let mut ids: Vec<usize> = Vec::new();
+        ids.push(popped_idx);
 
-            // Continuously peek at the next item
+        // Continuously peek at the next item
 
-            while let Some(next_item) = ctx.pq.peek() {
-                // If the next item's n_g matches our current one, pop and store it
-                if next_item.n_g == curr_n_g {
-                    if let Some(matched_item) = ctx.pq.pop() {
-                        ids.push(matched_item.idx);
-                    }
-                } else {
-                    // Since BinaryHeap is sorted, once we find a different n_g, 
-                    // we know no other matches exist.
-                    break;
-                }   
-            }
-
-            //println!( "n_g: {}, batch size: {}", curr_n_g, ids.len() );
-            if ctx.d_all.len() > threshold {
-                let min_n_g = curr_n_g;
-                filter_d_all_by_n_g(&mut ctx, min_n_g);
-                threshold = max( threshold, 3 * ctx.d_all.len() / 2 );
-            }
-            for  id  in ids {
-                process_configuration::<S>(&mut ctx, id );
+        while let Some(next_item) = ctx.pq.peek() {
+            // If the next item's n_g matches our current one, pop and store it
+            if next_item.n_g == curr_n_g {
+                if let Some(matched_item) = ctx.pq.pop() {
+                    ids.push(matched_item.idx);
+                }
+            } else {
+                // Since BinaryHeap is sorted, once we find a different n_g,
+                // we know no other matches exist.
+                break;
             }
         }
-        println!("# of configurations generated: {}", *ctx.conf_count);
-        println!("# of dead-end  configurations: {}", *ctx.conf_useless_count);
+
+        //println!( "n_g: {}, batch size: {}", curr_n_g, ids.len() );
+        if ctx.d_all.len() > threshold {
+            let min_n_g = curr_n_g;
+            filter_d_all_by_n_g(&mut ctx, min_n_g);
+            threshold = max(threshold, 3 * ctx.d_all.len() / 2);
+        }
+        for id in ids {
+            process_configuration::<S>(&mut ctx, id);
+        }
+    }
+    println!("# of configurations generated: {}", *ctx.conf_count);
+    println!("# of dead-end  configurations: {}", *ctx.conf_useless_count);
     let sol = extract_solution(&ctx);
-    Ok( (sol, ub_circle) )
+    Ok((sol, ub_circle))
 }
 
 // End of file
