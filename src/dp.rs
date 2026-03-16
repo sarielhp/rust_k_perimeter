@@ -21,8 +21,7 @@ use std::collections::BinaryHeap;
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, AnyBitPattern)]
 pub struct DPStateKey {
     pub loc: Point2D,
-    pub n_g: u32,
-    pub dir_index: u16,
+    pub n_g: u32
 }
 
 impl PartialOrd for DPStateKey {

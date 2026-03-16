@@ -2,6 +2,7 @@ use crate::point::*;
 
 use std::{
     cmp::{max, min},
+//    collections::HashMap,
   //  ops::{Add, Div, Mul, Sub},
 };
 
@@ -544,6 +545,9 @@ pub struct GridSet {
     width: usize,
     data: Vec<bool>,
     dto: Vec<f64>, // Distance to origin
+    point_id: Vec<usize>
+    pub points: Vec<Point2D>,
+    //pub point_to_id: HashMap<Point2D, usize>,
     dto_g: Vec<i64>, // Number of grid points inside distance to origin
 }
 
@@ -561,8 +565,11 @@ impl GridSet {
             max_y,
             _size, 
             width,
+            points: Vec::new(),
+            // point_to_id: HashMap::new(),
             data: vec![false; _size],
             dto: vec![-1.0; _size],
+            point_id: vec![-1; _size],
             dto_g: vec![0; _size],
         }
     }
@@ -587,12 +594,20 @@ impl GridSet {
         }
     }
 
-    pub fn insert_val(&mut self, p: Point2D, val: f64, g: i64) {
+    fn  get_index( &self, p: Point2D ) -> usize {
         if p.x >= self.min_x && p.x <= self.max_x && p.y >= self.min_y && p.y <= self.max_y {
             let idx = (p.y - self.min_y) as usize * self.width + (p.x - self.min_x) as usize;
-            self.dto[idx] = val;
-            self.dto_g[idx] = g;
+            idx
+        } else {
+            panic!("Point is outside the grid");
+            0
         }
+    }
+
+    pub fn insert_val(&mut self, p: Point2D, val: f64, g: i64) {
+        let idx = self.get_index( p );
+        self.dto[idx] = val;
+        self.dto_g[idx] = g;
     }
 
     #[allow(dead_code)]
@@ -624,6 +639,29 @@ impl GridSet {
                 if !self.contains(&p) {
                     continue;
                 }
+
+    pub fn compute_points(&mut self) {
+        self.points.clear();
+        self.point_to_id.clear();
+        for y in self.min_y..=self.max_y {
+            for x in self.min_x..=self.max_x {
+                let p = Point2D::new(x, y);
+                if self.contains(&p) {
+                    let id = self.points.len();
+                    self.points.push(p);
+                    self.point_id[ self.get_index(p) ] = id;
+                }
+            }
+        }
+    }
+
+    pub fn get_id(&self, p: Point2D) -> usize {
+        self.point_id[ self.get_index(p) ]
+    }
+
+    pub fn num_points(&self) -> usize {
+        self.points.len()
+    }
                 let (l,g) = distance_to_origin(bad_ch, p);
                 self.insert_val(p, l, g);
             }
@@ -933,6 +971,28 @@ pub fn compute_max_turn_angle(poly: &[Point2D]) -> f64 {
 
     // Convert radians to degrees
     max_angle_rad
+}
+
+pub struct VisibilityGraph {
+    pub adjacency_list: Vec<Vec<usize>>,
+}
+
+pub fn build_visibility_graph(good: &GridSet, bad_ch: &[Point2D]) -> VisibilityGraph {
+    let n = good.num_points();
+    let mut adjacency_list = vec![vec![]; n];
+
+    for i in 0..n {
+        for j in 0..n {
+            if i == j { continue; }
+            let p1 = good.points[i];
+            let p2 = good.points[j];
+            if !does_segment_intersect_polygon(bad_ch, p1, p2) {
+                adjacency_list[i].push(j);
+            }
+        }
+    }
+
+    VisibilityGraph { adjacency_list }
 }
 
 
