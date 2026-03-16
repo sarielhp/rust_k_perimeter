@@ -9,7 +9,7 @@ use std::mem;
 use mmap_vec::MmapVec;
 
 use crate::geom::{
-    is_all_left_turns,
+    //is_all_left_turns,
     //is_all_left_turns,
     is_colinear,
     //is_lefteq_turn,
@@ -57,7 +57,6 @@ pub fn comp_next_conf<K: Ord>(
     perimeter_so_far: f64,
     p_next: Point2D,
 ) -> (bool, DPStateKey, f64) {
-    //let a = cfg.loc - ctx.dirs[cfg.dir_index as usize];
     let b = cfg.loc;
     let c = p_next;
 
@@ -94,7 +93,7 @@ pub fn comp_next_conf<K: Ord>(
         return (false, *cfg, -1.0);
     }
 
-    if n_g > ctx.k {
+    if n_g as usize > ctx.k {
         return (false, *cfg, -1.0);
     }
 
@@ -123,10 +122,6 @@ pub fn extract_solution<K: Ord>(ctx: &DPContext<K>) -> Vec<Point2D> {
         curr_idx = val.prev_idx;
     }
 
-    // The Julia code pushes in reverse chronological order (end -> start)
-    // We reverse it to match counter-clockwise tracing from origin if needed.
-    // Wait, julia implementation extracts backwards but does not reverse:
-    // `extract_solution` returns `out` directly.
     out
 }
 
@@ -134,7 +129,7 @@ pub fn is_store<K: Ord>(ctx: &DPContext<K>, next_cfg: &DPStateKey, new_perim: f6
     if new_perim > *ctx.opt_perim {
         return false;
     }
-    if next_cfg.n_g > ctx.k {
+    if next_cfg.n_g as usize > ctx.k {
         println!("FLOGI");
         return false;
     }
@@ -346,26 +341,34 @@ pub struct QueueItem<K: Ord> {
 
 pub struct DPContext<'a, K: Ord> {
     pub conf_count: &'a mut i64,
-    pub conf_useless_count: &'a mut i64,
     pub d_all: &'a mut FxHashMap<DPStateKey, usize>,
     pub dp_vals: &'a mut MmapVec<DPStateValue>,
     pub pq: &'a mut BinaryHeap<QueueItem<K>>,
     pub opt_perim: &'a mut f64,
     pub best_sol: &'a mut DPStateKey,
-    pub all_left_turns_cache: &'a mut FxHashMap<(Point2D, Point2D), bool>,
-    //pub dirs: &'a Vec<Point2D>,
-    pub bad: &'a GridSet,
-    pub bad_in_ch: &'a Vec<Point2D>,
-    pub use_cache: bool,
-    pub k: u32,
+    pub k: usize,
     pub sqrt_k: u32,
     pub good: &'a GridSet,
     pub mask: u32,
     pub vg: &'a VisibilityGraph,
 }
 
+fn print_info<S: QueueStrategy>(ctx: &mut DPContext<S::Key>, n_g: u32) {
+    let used_bytes = ctx.dp_vals.len() * std::mem::size_of::<DPStateValue>();
+    let cap_bytes = ctx.dp_vals.capacity() * std::mem::size_of::<DPStateValue>();
+    let used_mb = used_bytes / 1_048_576;
+    let cap_mb = cap_bytes / 1_048_576;
+    println!(
+        "c: {}  n_g: {}  dp_vals (u/t): {} MB / {} MB  d_all {}",
+        (*ctx.conf_count).to_formatted_string(&Locale::en),
+        n_g,
+        used_mb.to_formatted_string(&Locale::en),
+        cap_mb.to_formatted_string(&Locale::en),
+        ctx.d_all.len().to_formatted_string(&Locale::en)
+    );
+}
+
 fn process_configuration<S: QueueStrategy>(ctx: &mut DPContext<S::Key>, cfg_idx: usize) {
-    let mut store_count = 0;
     *ctx.conf_count += 1;
 
     let (cfg, perimeter_so_far) = {
@@ -374,20 +377,8 @@ fn process_configuration<S: QueueStrategy>(ctx: &mut DPContext<S::Key>, cfg_idx:
     };
 
     if *ctx.conf_count & (ctx.mask as i64) == 0 {
-        let used_bytes = ctx.dp_vals.len() * std::mem::size_of::<DPStateValue>();
-        let cap_bytes = ctx.dp_vals.capacity() * std::mem::size_of::<DPStateValue>();
-        let used_mb = used_bytes / 1_048_576;
-        let cap_mb = cap_bytes / 1_048_576;
-        println!(
-            "c: {}  n_g: {}  dp_vals (u/t): {} MB / {} MB  d_all {}",
-            (*ctx.conf_count).to_formatted_string(&Locale::en),
-            cfg.n_g,
-            used_mb.to_formatted_string(&Locale::en),
-            cap_mb.to_formatted_string(&Locale::en),
-            ctx.d_all.len().to_formatted_string(&Locale::en)
-        );
+        print_info::<S>(ctx, cfg.n_g);
     }
-    //let _prev_dir = ctx.dirs[dir_start as usize];
 
     let loc_id = ctx.good.get_point_id(cfg.loc);
     let nbrs = &ctx.vg.adjacency_list[loc_id];
@@ -396,35 +387,7 @@ fn process_configuration<S: QueueStrategy>(ctx: &mut DPContext<S::Key>, cfg_idx:
         let p_next: Point2D = ctx.good.get_point_by_id(id_nbr).clone();
         //let v = ctx.dirs[dir_i];
 
-        if cfg.loc.y == 0 && p_next.y <= 0 {
-            continue;
-        }
-
-        // let p_next = cfg.loc + v;
-        if ctx.bad.contains(&p_next) {
-            continue;
-        }
-
-        let cache_key = (cfg.loc, p_next);
-        let is_valid_turn = if ctx.use_cache {
-            if let Some(&res) = ctx.all_left_turns_cache.get(&cache_key) {
-                res
-            } else {
-                let res = is_all_left_turns(cfg.loc, p_next, ctx.bad_in_ch);
-                if let Err(_) = ctx.all_left_turns_cache.try_reserve(1) {
-                    let msg = "Error: Out of memory when attempting to insert into hash table";
-                    println!("{}", msg);
-                    eprintln!("{}", msg);
-                    std::process::exit(1);
-                }
-                ctx.all_left_turns_cache.insert(cache_key, res);
-                res
-            }
-        } else {
-            is_all_left_turns(cfg.loc, p_next, ctx.bad_in_ch)
-        };
-
-        if !is_valid_turn {
+        if ((cfg.loc.y == 0) && (p_next.y <= 0)) || (!ctx.good.contains(&p_next)) {
             continue;
         }
 
@@ -449,7 +412,6 @@ fn process_configuration<S: QueueStrategy>(ctx: &mut DPContext<S::Key>, cfg_idx:
             continue;
         }
 
-        store_count += 1;
         let next_val = DPStateValue {
             cfg: next_cfg,
             perimeter_so_far: new_perim,
@@ -480,27 +442,21 @@ fn process_configuration<S: QueueStrategy>(ctx: &mut DPContext<S::Key>, cfg_idx:
             });
         }
 
-        if next_cfg.n_g == ctx.k {
+        if next_cfg.n_g as usize == ctx.k {
             if total_perim < *ctx.opt_perim {
                 *ctx.opt_perim = total_perim;
                 *ctx.best_sol = next_cfg;
             }
         }
     }
-    if store_count == 0 {
-        *ctx.conf_useless_count += 1;
-    }
 }
 
-pub fn max_edge_length(k: u32) -> u32 {
+pub fn max_edge_length(k: usize) -> u32 {
     (k as f64).powf(1.0 / 3.0).round() as u32 + 1
 }
 pub fn minimize_perimeter_dp<S: QueueStrategy>(
-    k: u32,
+    k: usize,
     good: &GridSet,
-    bad: &GridSet,
-    bad_in_ch: &Vec<Point2D>,
-    use_cache: bool,
     vg: &VisibilityGraph,
 ) -> anyhow::Result<(Vec<Point2D>, f64)> {
     //
@@ -542,8 +498,6 @@ pub fn minimize_perimeter_dp<S: QueueStrategy>(
     });
 
     let hint_size = 2 * (k as usize) * (k as usize);
-    //let hint_size_d = 2 * (k as usize) * (k as usize) + 20 * (k as usize) + 1000;
-    //let hint_size_s = (k as usize) + (k as usize) * (k as usize) / 8;
     let mut threshold = (k as usize) * 100;
 
     println!(
@@ -552,21 +506,16 @@ pub fn minimize_perimeter_dp<S: QueueStrategy>(
     );
 
     let mut d_all = FxHashMap::default();
-    //let mut d_all = FxHashMap::with_capacity( hint_size );
-    let mut all_left_turns_cache: FxHashMap<(Point2D, Point2D), bool> = FxHashMap::default();
     println!("Tring to resize d_all.. {}", 2 * threshold);
     d_all.reserve(2 * threshold);
 
-    //let byte_size = hint_size * std::mem::size_of::<DPStateValue>();
     // 1. Open/Create the file and set its size
 
     println!("Trying to allocate dp_vals... ");
-    //let mut dp_vals = MmapVec::<DPStateValue>::new();
     let mut dp_vals = MmapVec::<DPStateValue>::with_capacity(hint_size)?;
-    println!("Path of file: {}", dp_vals.path().display());
-    //let mut dp_vals: MmapVec<> = config.create()?;
 
-    //let mut dp_vals = Vec::with_capacity(hint_size);
+    println!("Path of file: {}", dp_vals.path().display());
+
     let start_val = DPStateValue {
         cfg: start_key,
         perimeter_so_far: 0.0,
@@ -582,20 +531,14 @@ pub fn minimize_perimeter_dp<S: QueueStrategy>(
     dp_vals.push(start_val)?;
 
     let mut conf_count: i64 = 0;
-    let mut conf_useless_count: i64 = 0;
+    //let mut conf_useless_count: i64 = 0;
     let mut ctx = DPContext {
         conf_count: &mut conf_count,
-        conf_useless_count: &mut conf_useless_count,
         d_all: &mut d_all,
         dp_vals: &mut dp_vals,
         pq: &mut pq,
         opt_perim: &mut opt_perim,
         best_sol: &mut best_sol,
-        all_left_turns_cache: &mut all_left_turns_cache,
-        //dirs: &dirs,
-        bad,
-        bad_in_ch,
-        use_cache,
         k,
         sqrt_k,
         good,
@@ -617,7 +560,6 @@ pub fn minimize_perimeter_dp<S: QueueStrategy>(
         ids.push(popped_idx);
 
         // Continuously peek at the next item
-
         while let Some(next_item) = ctx.pq.peek() {
             // If the next item's n_g matches our current one, pop and store it
             if next_item.n_g == curr_n_g {
@@ -642,7 +584,7 @@ pub fn minimize_perimeter_dp<S: QueueStrategy>(
         }
     }
     println!("# of configurations generated: {}", *ctx.conf_count);
-    println!("# of dead-end  configurations: {}", *ctx.conf_useless_count);
+    //    println!("# of dead-end  configurations: {}", *ctx.conf_useless_count);
     let sol = extract_solution(&ctx);
     Ok((sol, ub_circle))
 }

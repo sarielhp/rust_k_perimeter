@@ -26,7 +26,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let start = Instant::now();
     let args: Vec<String> = env::args().collect();
     if args.len() < 2 {
-        println!("Usage: k_perimeter [k] [--no-cache] [--queue=strategy]");
+        println!("Usage: k_perimeter [k] [--queue=strategy]");
         println!();
         println!("Arguments:");
         println!("  [k]               The number of grid points the polygon should enclose.");
@@ -57,8 +57,6 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     std::fs::create_dir_all(dir_polys).unwrap_or_default();
     std::fs::create_dir_all(dir_summary).unwrap_or_default();
 
-    let use_cache = !args.contains(&String::from("--no-cache"));
-
     let mut queue_strategy = "ng_perim_dto".to_string();
     for arg in args.iter().skip(1) {
         if arg.starts_with("--queue=") {
@@ -74,6 +72,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
     };
 
+    println!("Computing convex-hull of disk around origin with k points... Kind of...");
     let ch_z = ch_disk_origin(k, false);
     let ch_z_exp = ch_disk_origin(k, true);
 
@@ -89,9 +88,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let l_f = 2 + ((k as f64).powf(0.25) / 4.0).round() as i64;
     let l = if l_f > 3 { l_f } else { 3 };
 
+    println!("Computing good and bad sets with width = {}...", l);
     let (mut good, bad, bad_ch) = compute_good_bad_sets(&ch_m_exp, l as f64);
 
-    let max_edge_l = max_edge_length(k as u32);
+    let max_edge_l = max_edge_length(k);
     let dirs = crate::geom::generate_primitive_vectors(max_edge_l);
 
     println!("Building visibility graph...");
@@ -110,21 +110,19 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("# bad  points: {}", bad.length());
 
     let Ok((sol, ub_circle)) = (if queue_strategy == "perim_ng" {
-        minimize_perimeter_dp::<PerimThenNgStrategy>(k as u32, &good, &bad, &bad_ch, use_cache, &vg)
+        minimize_perimeter_dp::<PerimThenNgStrategy>(k, &good, &vg)
     } else if queue_strategy == "ng_idx" {
-        minimize_perimeter_dp::<NgThenIdxStrategy>(k as u32, &good, &bad, &bad_ch, use_cache, &vg)
+        minimize_perimeter_dp::<NgThenIdxStrategy>(k, &good, &vg)
     } else if queue_strategy == "perim_idx" {
-        minimize_perimeter_dp::<PerimThenIdxStrategy>(
-            k as u32, &good, &bad, &bad_ch, use_cache, &vg,
-        )
+        minimize_perimeter_dp::<PerimThenIdxStrategy>(k, &good, &vg)
     } else if queue_strategy == "perim_ng_dtog" {
-        minimize_perimeter_dp::<PerimNgDtogStrategy>(k as u32, &good, &bad, &bad_ch, use_cache, &vg)
+        minimize_perimeter_dp::<PerimNgDtogStrategy>(k, &good, &vg)
     } else if queue_strategy == "ng_dto" {
-        minimize_perimeter_dp::<NgDtoStrategy>(k as u32, &good, &bad, &bad_ch, use_cache, &vg)
+        minimize_perimeter_dp::<NgDtoStrategy>(k, &good, &vg)
     } else if queue_strategy == "ng_perim" {
-        minimize_perimeter_dp::<NgThenPerimStrategy>(k as u32, &good, &bad, &bad_ch, use_cache, &vg)
+        minimize_perimeter_dp::<NgThenPerimStrategy>(k, &good, &vg)
     } else {
-        minimize_perimeter_dp::<NgPerimDtoStrategy>(k as u32, &good, &bad, &bad_ch, use_cache, &vg)
+        minimize_perimeter_dp::<NgPerimDtoStrategy>(k, &good, &vg)
     }) else {
         eprintln!("Error: The DP solver failed to initialize or write to disk.");
         std::process::exit(1);

@@ -1024,6 +1024,12 @@ pub fn build_visibility_graph(
             if does_segment_intersect_polygon(bad_ch, p, q) {
                 continue;
             }
+
+            let f_left = is_all_left_turns(p, q, bad_ch);
+            if !f_left {
+                continue;
+            }
+
             let q_id = good.get_point_id(q);
             adjacency_list[i].push(q_id);
         }
