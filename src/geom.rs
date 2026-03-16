@@ -679,6 +679,7 @@ impl GridSet {
                 if !self.contains(&p) {
                     continue;
                 }
+                //println!("Computing distance to origin for point: ({}, {})", p.x, p.y);
 
                 let (l, g) = distance_to_origin(bad_ch, p);
                 self.insert_val(p, l, g);
@@ -792,7 +793,7 @@ pub fn distance_to_origin(bad_ch: &[Point2D], p: Point2D) -> (f64, i64) {
     pnts.push(origin);
     pnts.push(p);
     let poly = convex_hull(&pnts);
-
+    //println!("computed convex-hull");
     let n = poly.len();
     assert!(n > 2);
     assert!(is_left_turn(poly[0], poly[1], poly[2]));
@@ -824,10 +825,14 @@ pub fn distance_to_origin(bad_ch: &[Point2D], p: Point2D) -> (f64, i64) {
     // Picks theorem: A = I + B/2 - 1
     let i_verts = (area - t_b as f64 / 2.0 + 1.0) as i64; // Number of internal vertices in new polygon
     let g_overall: i64 = i_verts + t_b as i64 - b_edge as i64 - 2;
+    /*println!(
+        "t_l: {}, t_b: {}, area: {}, i_verts: {}, g_overall: {}",
+        t_l, t_b, area, i_verts, g_overall
+    );*/
     if i_p < i_o {
         return (t_l, g_overall);
     }
-
+    //println!("i_p: {}, i_o: {}", i_p, i_o);
     let total_area = polygon_area(&poly);
     let mut total_b = 0;
     for k in 0..n {
@@ -838,7 +843,12 @@ pub fn distance_to_origin(bad_ch: &[Point2D], p: Point2D) -> (f64, i64) {
     }
 
     let comp_area = total_area - area;
-    let comp_b = total_b - t_b + b_edge + 2;
+
+    /*println!(
+        "Computed: total_b: {}, t_b: {}, b_edge: {}",
+        total_b, t_b, b_edge
+    );*/
+    let comp_b = total_b + b_edge + 2 - t_b;
     let g_comp: i64 = (comp_area - comp_b as f64 / 2.0 + 1.0) as i64; // Number of internal vertices in new polygon
 
     assert!(g_comp >= 0);
