@@ -12,7 +12,8 @@ pub fn vtrans(p: &[Point2D], v: Point2D) -> Vec<Point2D> {
 
 #[allow(dead_code)]
 pub fn is_lefteq_turn(a: Point2D, b: Point2D, c: Point2D) -> bool {
-    (b.x - a.x) * (c.y - a.y) >= (b.y - a.y) * (c.x - a.x)
+    (b.x as i64 - a.x as i64) * (c.y as i64 - a.y as i64)
+        >= (b.y as i64 - a.y as i64) * (c.x as i64 - a.x as i64)
 }
 
 pub fn d_y(a: Point2D, b: Point2D) -> f64 {
@@ -20,11 +21,13 @@ pub fn d_y(a: Point2D, b: Point2D) -> f64 {
 }
 
 pub fn is_left_turn(a: Point2D, b: Point2D, c: Point2D) -> bool {
-    (b.x - a.x) * (c.y - a.y) > (b.y - a.y) * (c.x - a.x)
+    (b.x as i64 - a.x as i64) * (c.y as i64 - a.y as i64)
+        > (b.y as i64 - a.y as i64) * (c.x as i64 - a.x as i64)
 }
 
 pub fn is_right_turn(a: Point2D, b: Point2D, c: Point2D) -> bool {
-    (b.x - a.x) * (c.y - a.y) < (b.y - a.y) * (c.x - a.x)
+    (b.x as i64 - a.x as i64) * (c.y as i64 - a.y as i64)
+        < (b.y as i64 - a.y as i64) * (c.x as i64 - a.x as i64)
 }
 
 pub fn distance_to_segment(p: Point2D, a: Point2D, b: Point2D) -> f64 {
@@ -1015,10 +1018,20 @@ pub fn build_visibility_graph(
         for j in 0..n_dirs {
             let q_dir = dirs[j];
             let q = p + q_dir;
+
+            // Do not allow to connect back to the origin!
+            if (q.x == 0) && (q.y == 0) {
+                continue;
+            }
+
             if !good.contains(&q) {
                 continue;
             }
             if is_right_turn(origin, p, q) {
+                continue;
+            }
+            if is_right_turn(p, q, origin) {
+                println!("BOGI");
                 continue;
             }
             if does_segment_intersect_polygon(bad_ch, p, q) {

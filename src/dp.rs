@@ -104,6 +104,7 @@ pub fn comp_next_conf<K: Ord>(
 }
 
 pub fn extract_solution<K: Ord>(ctx: &DPContext<K>) -> Vec<Point2D> {
+    println!("Extracting solution with n_g = {}", ctx.best_sol.n_g);
     let mut out = Vec::new();
     let mut curr_idx = *ctx.d_all.get(&*ctx.best_sol).unwrap_or_else(|| {
         eprintln!(
