@@ -1,8 +1,16 @@
-# Smallest k-Perimeter Polygon
+# Smallest k-Perimeter Polygon (k_perimeter_2)
 
 Joint work with Elfarouk Harb.
 
-## rust_k_perimeter
+## Note
+
+This is a rewrite of the previous program, which seems to be
+dramatically faster. The DP was changed, and it is now much
+smaller. In addition, the code now precomputes a visibility graph to
+help figure out which transitions to use, which also resulted in a
+significant speedup
+
+## k_perimeter_2
 
 Rust code to compute the minimum perimeter grid polygon (i.e., polygon
 whose vertices are integral points) containing k points. It is not
