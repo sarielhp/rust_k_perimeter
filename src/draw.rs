@@ -1,5 +1,5 @@
-use  crate::point::*;
 use crate::geom::{bound, GridSet};
+use crate::point::*;
 use cairo::{Context, FontSlant, FontWeight, PdfSurface};
 
 fn cr_string_pdf(cr: &Context, w: f64, h: f64, text_content: &str) {
@@ -50,7 +50,6 @@ pub fn draw_polygon_with_grid(
     poly_circ_exp: &[Point2D],
     k: usize,
     ub_circle: f64,
-    bad: &GridSet,
     good: &GridSet,
 ) {
     let filename: String = format!("{}/{:05}.pdf", dir_pdfs, k);
@@ -96,7 +95,7 @@ pub fn draw_polygon_with_grid(
 
             if x == 0 && y == 0 {
                 cr.set_source_rgb(1.0, 1.0, 0.0);
-            } else if bad.contains(&p) {
+            } else if !good.contains(&p) {
                 cr.set_source_rgb(0.8, 0.0, 0.0);
             } else if good.contains(&p) {
                 cr.set_source_rgb(0.0, 0.0, 1.0);

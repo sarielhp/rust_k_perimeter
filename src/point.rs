@@ -1,4 +1,4 @@
-use bytemuck::{AnyBitPattern};
+use bytemuck::AnyBitPattern;
 
 use std::{
     //cmp::{max, min},
@@ -15,7 +15,7 @@ pub struct Point2D {
 }
 
 impl Point2D {
-    pub fn new(x: CoordType, y: CoordType) -> Self {
+    pub const fn new(x: CoordType, y: CoordType) -> Self {
         Self { x, y }
     }
 
@@ -23,14 +23,16 @@ impl Point2D {
         self.x == 0 && self.y == 0
     }
 
-    pub fn norm_sq(&self) -> f64 {
-        ((self.x * self.x) + (self.y * self.y)) as f64
+    pub fn norm_sq(&self) -> i64 {
+        ((self.x as i64 * self.x as i64) + (self.y as i64 * self.y as i64)) as i64
     }
 
     pub fn norm(&self) -> f64 {
-        self.norm_sq().sqrt()
+        (self.norm_sq() as f64).sqrt()
     }
 }
+
+pub const ORIGIN: Point2D = Point2D::new(0, 0);
 
 impl Add for Point2D {
     type Output = Point2D;

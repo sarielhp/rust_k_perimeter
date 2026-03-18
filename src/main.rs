@@ -10,7 +10,7 @@ use dp::{
 };
 use draw::{compute_perimeter, draw_polygon_with_grid};
 use geom::{
-    build_visibility_graph, ch_disk_origin, compute_good_bad_sets, compute_max_turn_angle,
+    build_visibility_graph, ch_disk_origin, compute_good_set, compute_max_turn_angle,
     len_longest_edge, vtrans,
 };
 use point::*;
@@ -89,7 +89,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let l = if l_f > 3 { l_f } else { 3 };
 
     println!("Computing good and bad sets with width = {}...", l);
-    let (mut good, bad, bad_ch) = compute_good_bad_sets(&ch_m_exp, l as f64);
+    let (mut good, bad_ch) = compute_good_set(&ch_m_exp, l as f64);
 
     let max_edge_l = max_edge_length(k);
     let dirs = crate::geom::generate_primitive_vectors(max_edge_l);
@@ -105,9 +105,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     write!(log, "# k: {}\n", k)?;
     writeln!(log, "# Good points: {}", good.length())?;
-    writeln!(log, "# bad  points: {}", bad.length())?;
     println!("# Good points: {}", good.length());
-    println!("# bad  points: {}", bad.length());
 
     let Ok((sol, ub_circle)) = (if queue_strategy == "perim_ng" {
         minimize_perimeter_dp::<PerimThenNgStrategy>(k, &good, &vg)
@@ -131,7 +129,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("k: {}", k);
 
     let perimeter = compute_perimeter(&sol);
-    draw_polygon_with_grid(dir_pdfs, &sol, &ch_m, &ch_m_exp, k, ub_circle, &bad, &good);
+    draw_polygon_with_grid(dir_pdfs, &sol, &ch_m, &ch_m_exp, k, ub_circle, &good);
     let ch_m_perimeter = compute_perimeter(&ch_m);
     writeln!(log, "# Perimeter        : {}", perimeter)?;
     writeln!(log, "# circle perimeter : {}", ch_m_perimeter)?;
@@ -156,8 +154,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("Longest edge len : {}", len_longest_edge(&sol));
     let duration = start.elapsed();
 
-    writeln!(log, "# Running time in seconds: {}", duration.as_secs())?;
-    println!("Running time in seconds: {}", duration.as_secs());
+    writeln!(log, "# Running time in seconds: {}", duration.as_secs_f64())?;
+    println!("Running time in seconds: {}", duration.as_secs_f64());
 
     let filename_poly: String = format!("{}/{:05}_poly.txt", dir_polys, k);
     save_polygon(&filename_poly, &sol, Some(&log))?;

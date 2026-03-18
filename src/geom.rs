@@ -1,4 +1,5 @@
 use crate::point::*;
+//use cached::proc_macro::cached;
 
 use std::{
     cmp::{max, min},
@@ -28,6 +29,12 @@ pub fn is_left_turn(a: Point2D, b: Point2D, c: Point2D) -> bool {
 pub fn is_right_turn(a: Point2D, b: Point2D, c: Point2D) -> bool {
     (b.x as i64 - a.x as i64) * (c.y as i64 - a.y as i64)
         < (b.y as i64 - a.y as i64) * (c.x as i64 - a.x as i64)
+}
+
+#[allow(dead_code)]
+pub fn is_righteq_turn(a: Point2D, b: Point2D, c: Point2D) -> bool {
+    (b.x as i64 - a.x as i64) * (c.y as i64 - a.y as i64)
+        <= (b.y as i64 - a.y as i64) * (c.x as i64 - a.x as i64)
 }
 
 pub fn distance_to_segment(p: Point2D, a: Point2D, b: Point2D) -> f64 {
@@ -128,11 +135,11 @@ pub fn fary(vec: &mut Vec<Point2D>, u: Point2D, v: Point2D, max_d: i64) {
     fary(vec, mid, v, max_d);
 }
 
-pub fn double_triangle_area(a: Point2D, b: Point2D, c: Point2D) -> i32 {
+pub fn double_triangle_area(a: Point2D, b: Point2D, c: Point2D) -> i64 {
     (a.x as i64 * (b.y as i64 - c.y as i64)
         + (b.x as i64) * (c.y as i64 - a.y as i64)
         + (c.x as i64) * (a.y as i64 - b.y as i64))
-        .abs() as i32
+        .abs() as i64
 }
 
 pub fn triangle_area(a: Point2D, b: Point2D, c: Point2D) -> f64 {
@@ -148,6 +155,7 @@ pub fn gcd(mut a: i64, mut b: i64) -> i64 {
     a.abs()
 }
 
+//#[cached]
 pub fn grid_points_inside_edge(u: Point2D, v: Point2D) -> u32 {
     if u == v {
         return 0;
@@ -155,6 +163,11 @@ pub fn grid_points_inside_edge(u: Point2D, v: Point2D) -> u32 {
     let e = u - v;
     let t = gcd(e.x as i64, e.y as i64);
     assert!(t >= 1);
+    // Check for overflow before casting
+    if t > 1 + u32::MAX as i64 {
+        eprintln!("Error: grid_points_inside_edge overflow: t = {}", t);
+        std::process::exit(1);
+    }
     (t - 1) as u32
 }
 
@@ -231,7 +244,7 @@ fn add_points(points: &mut Vec<Point2D>, y_old: CoordType, y_new: CoordType) -> 
     points
 }
 
-#[allow(dead_code)]
+//#[allow(dead_code)]
 fn average_of_min_y(points: &[Point2D]) -> Option<Point2D> {
     if points.is_empty() {
         return None;
@@ -432,14 +445,18 @@ pub fn triangle_count_new_points(a: Point2D, b: Point2D, c: Point2D) -> (u32, u3
     let bc_g_n = grid_points_inside_edge(b, c);
     let ac_g_n = grid_points_inside_edge(a, c);
 
-    //    assert!(ab_g_n >= 0);
-    //    assert!(bc_g_n >= 0);
-    //    assert!(ac_g_n >= 0);
-
-    let boundary_n = ab_g_n + bc_g_n + ac_g_n + count_distinct(a, b, c);
+    // Use u64 to prevent overflow in boundary calculation
+    let boundary_n: u64 = ab_g_n as u64 + bc_g_n as u64 + ac_g_n as u64 + count_distinct(a, b, c) as u64;
 
     let tri_i_new = if area2 > 0 {
-        (area2 - (boundary_n as i32) + 2) / 2
+        let area_i64 = area2 as i64;
+        let boundary_i64 = boundary_n as i64;
+        let result = (area_i64 - boundary_i64 + 2) / 2;
+        if result < 0 || result > u32::MAX as i64 {
+            eprintln!("Error: tri_i_new overflow: {}", result);
+            std::process::exit(1);
+        }
+        result as u32
     } else {
         0
     };
@@ -448,17 +465,32 @@ pub fn triangle_count_new_points(a: Point2D, b: Point2D, c: Point2D) -> (u32, u3
         eprintln!("Error: a == c inside triangle_count_new_points");
         std::process::exit(1);
     } else if a == b {
-        ac_g_n as i32 + 1
+        let result = ac_g_n as i64 + 1;
+        if result > i32::MAX as i64 {
+            eprintln!("Error: tri_b_new overflow in ac_g_n case: {}", result);
+            std::process::exit(1);
+        }
+        result as i32
     } else if area2 == 0 {
-        bc_g_n as i32 + 1
+        let result = bc_g_n as i64 + 1;
+        if result > i32::MAX as i64 {
+            eprintln!("Error: tri_b_new overflow in area2==0 case: {}", result);
+            std::process::exit(1);
+        }
+        result as i32
     } else {
-        ac_g_n as i32 + bc_g_n as i32 + 1
+        let result = ac_g_n as i64 + bc_g_n as i64 + 1;
+        if result > i32::MAX as i64 {
+            eprintln!("Error: tri_b_new overflow in else case: {}", result);
+            std::process::exit(1);
+        }
+        result as i32
     };
 
-    assert!(tri_i_new >= 0);
+    //assert!(tri_i_new >= 0);
     assert!(tri_b_new >= 0);
 
-    (tri_i_new as u32, tri_b_new as u32)
+    (tri_i_new, tri_b_new as u32)
 }
 
 #[allow(dead_code)]
@@ -466,35 +498,6 @@ pub fn angle_between(p1: Point2D, p2: Point2D) -> f64 {
     let dot_prod = (p1.x * p2.x + p1.y * p2.y) as f64;
     let det_prod = (p1.x * p2.y - p1.y * p2.x) as f64;
     det_prod.atan2(dot_prod)
-}
-
-#[allow(dead_code)]
-pub fn comp_stop_indexes(v: &[Point2D], max_angle: f64) -> Vec<usize> {
-    let mut stops = Vec::new();
-    let dir_end = v.len() - 1;
-    for i in 0..v.len() {
-        let prev_dir = v[i];
-        let mut f_break = false;
-
-        for dir_i in i..v.len() {
-            let vec_dir = v[dir_i];
-            let alpha = angle_between(prev_dir, vec_dir);
-            if alpha > max_angle {
-                if dir_i > 0 {
-                    stops.push(dir_i - 1);
-                } else {
-                    stops.push(0);
-                }
-                f_break = true;
-                break;
-            }
-        }
-        if !f_break {
-            stops.push(dir_end);
-        }
-    }
-    assert_eq!(stops.len(), v.len());
-    stops
 }
 
 pub fn bound(polys: &[&[Point2D]], expand: i32) -> (CoordType, CoordType, CoordType, CoordType) {
@@ -570,8 +573,17 @@ impl GridSet {
     pub fn new(min_x: CoordType, max_x: CoordType, min_y: CoordType, max_y: CoordType) -> Self {
         let width = (max_x - min_x + 1).max(0) as usize;
         let height = (max_y - min_y + 1).max(0) as usize;
-
-        let _size = width * height;
+        let _size = match width.checked_mul(height) {
+            Some(size) if size <= 100_000_000 => size, // Max 100M grid points
+            Some(_) => {
+                eprintln!("Error: Grid too large: {}x{}", width, height);
+                std::process::exit(1);
+            }
+            None => {
+                eprintln!("Error: Grid size overflow");
+                std::process::exit(1);
+            }
+        };
         println!("Size: {}", _size);
         Self {
             min_x,
@@ -672,7 +684,7 @@ impl GridSet {
         self.points.len()
     }
 
-    pub fn fill_dist_to_origin(&mut self, bad_ch: &Vec<Point2D>) {
+    pub fn fill_dist_to_origin(&mut self, bad_ch: &[Point2D]) {
         for y in self.min_y..=self.max_y {
             if y < 0 {
                 continue;
@@ -871,12 +883,12 @@ pub fn polygon_area(poly: &[Point2D]) -> f64 {
     (area / 2.0).abs()
 }
 
-pub fn compute_good_bad_sets(ch_m: &[Point2D], l: f64) -> (GridSet, GridSet, Vec<Point2D>) {
+pub fn compute_good_set(ch_m: &[Point2D], l: f64) -> (GridSet, Vec<Point2D>) {
     let expand = (3.0 * l + 3.0).ceil() as i32;
     let (min_x, max_x, _, max_y) = bound(&[ch_m], expand);
     let min_y = 0;
 
-    let mut bad = GridSet::new(min_x, max_x, min_y, max_y);
+    //let mut bad = GridSet::new(min_x, max_x, min_y, max_y);
     let mut good = GridSet::new(min_x, max_x, min_y, max_y);
     let mut bad_in: Vec<Point2D> = Vec::new();
     for y in min_y..=max_y {
@@ -889,7 +901,7 @@ pub fn compute_good_bad_sets(ch_m: &[Point2D], l: f64) -> (GridSet, GridSet, Vec
             let d = polygon_boundary_distance(ch_m, p);
 
             if d > l {
-                bad.insert(p);
+                // bad.insert(p);
                 if f_in {
                     bad_in.push(p);
                 }
@@ -920,14 +932,14 @@ pub fn compute_good_bad_sets(ch_m: &[Point2D], l: f64) -> (GridSet, GridSet, Vec
                 continue;
             }
             good.delete(p);
-            bad.insert(p);
+            //bad.insert(p);
             bad_in.push(p);
         }
     }
     let bad_ch = convex_hull(&bad_in);
     good.compute_points();
 
-    (good, bad, bad_ch)
+    (good, bad_ch)
 }
 
 pub fn len_longest_edge(poly: &[Point2D]) -> f64 {

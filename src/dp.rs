@@ -9,14 +9,7 @@ use std::mem;
 use mmap_vec::MmapVec;
 
 use crate::geom::{
-    //is_all_left_turns,
-    //is_all_left_turns,
-    is_colinear,
-    //is_lefteq_turn,
-    is_right_turn,
-    triangle_count_new_points,
-    GridSet,
-    VisibilityGraph,
+    is_colinear, is_right_turn, triangle_count_new_points, GridSet, VisibilityGraph,
 };
 use num_format::{Locale, ToFormattedString};
 use rustc_hash::FxHashMap;
@@ -60,8 +53,6 @@ pub fn comp_next_conf<K: Ord>(
     let b = cfg.loc;
     let c = p_next;
 
-    let origin = Point2D::new(0, 0);
-
     if (c.y < 0)
         || c.is_zero()
         || (c.x as i64) > (ctx.sqrt_k as i64)
@@ -69,12 +60,13 @@ pub fn comp_next_conf<K: Ord>(
         || (-c.x as i64) > (ctx.sqrt_k as i64)
         || (-c.y as i64) > (ctx.sqrt_k as i64)
         || perimeter_so_far > *ctx.opt_perim
-        || is_right_turn(b, c, origin)
+        || is_right_turn(b, c, ORIGIN)
+        || (b == c)
     {
         return (false, *cfg, -1.0);
     }
 
-    if is_colinear(b, c, origin) {
+    if is_colinear(b, c, ORIGIN) {
         if c.norm_sq() < b.norm_sq() {
             return (false, *cfg, -1.0);
         }
@@ -84,10 +76,24 @@ pub fn comp_next_conf<K: Ord>(
     assert!(b != c);
     //  assert!(v.x != 0 || v.y != 0);
 
-    let (tri_i_new, tri_b_new) = triangle_count_new_points(origin, b, c);
+    let (tri_i_new, tri_b_new) = triangle_count_new_points(ORIGIN, b, c);
 
     //assert!(tri_i_new >= 0 && tri_b_new >= 0);
-    let n_g: u32 = cfg.n_g + tri_i_new + tri_b_new;
+    
+    // Check for overflow in n_g calculation
+    let n_g = match cfg.n_g.checked_add(tri_i_new) {
+        Some(sum) => match sum.checked_add(tri_b_new) {
+            Some(final_sum) => final_sum,
+            None => {
+                eprintln!("Error: n_g overflow in second addition: {} + {}", sum, tri_b_new);
+                return (false, *cfg, -1.0);
+            }
+        },
+        None => {
+            eprintln!("Error: n_g overflow in first addition: {} + {}", cfg.n_g, tri_i_new);
+            return (false, *cfg, -1.0);
+        }
+    };
 
     if n_g > 0 && c.is_zero() {
         return (false, *cfg, -1.0);
@@ -498,8 +504,12 @@ pub fn minimize_perimeter_dp<S: QueueStrategy>(
         idx: 0,
     });
 
-    let hint_size = 2 * (k as usize) * (k as usize);
-    let mut threshold = (k as usize) * 100;
+    // Replace line 493-494 in dp.rs
+    let hint_size = std::cmp::min(2 * k * k, 10_000_000); // 10M max ~160MB
+    let mut threshold = std::cmp::min(k * 100, 1_000_000);   // 1M max
+
+    //let hint_size = 2 * (k as usize) * (k as usize);
+    //let mut threshold = (k as usize) * 100;
 
     println!(
         "hint_size   : {}",
