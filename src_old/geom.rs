@@ -1011,28 +1011,18 @@ pub fn compute_max_turn_angle(poly: &[Point2D]) -> f64 {
     max_angle_rad
 }
 
-#[derive(Debug, Clone, Copy)]
-pub struct EdgeInfo {
-    pub target_id: usize,
-    pub n_g_delta: u32,
-    pub edge_len: f64,
-    pub target_dto: f64,
-}
-
 pub struct VisibilityGraph {
-    pub adjacency_list: Vec<Vec<EdgeInfo>>,
+    pub adjacency_list: Vec<Vec<usize>>,
 }
 
 pub fn build_visibility_graph(
     good: &GridSet,
     bad_ch: &[Point2D],
     dirs: &Vec<Point2D>,
-    k: usize,
 ) -> VisibilityGraph {
     let n = good.num_points();
     let mut adjacency_list = vec![vec![]; n];
     let n_dirs = dirs.len();
-    let sqrt_k = (k as f64).sqrt().ceil() as i32 + 1;
 
     let origin = Point2D { x: 0, y: 0 };
     for i in 0..n {
@@ -1041,32 +1031,21 @@ pub fn build_visibility_graph(
             let q_dir = dirs[j];
             let q = p + q_dir;
 
-            if (q.y < 0)
-                || q.is_zero()
-                || (q.x as i64) > (sqrt_k as i64)
-                || (q.y as i64) > ((2 * sqrt_k) as i64)
-                || (-q.x as i64) > (sqrt_k as i64)
-                || (-q.y as i64) > (sqrt_k as i64)
-                || (p.y == 0 && q.y <= 0)
-                || (p == q)
-            {
+            // Do not allow to connect back to the origin!
+            if (q.x == 0) && (q.y == 0) {
                 continue;
             }
 
             if !good.contains(&q) {
                 continue;
             }
-
-            if is_right_turn(p, q, origin) {
+            if is_right_turn(origin, p, q) {
                 continue;
             }
-
-            if is_colinear(p, q, origin) {
-                if q.norm_sq() < p.norm_sq() {
-                    continue;
-                }
+            if is_right_turn(p, q, origin) {
+                println!("BOGI");
+                continue;
             }
-
             if does_segment_intersect_polygon(bad_ch, p, q) {
                 continue;
             }
@@ -1077,17 +1056,7 @@ pub fn build_visibility_graph(
             }
 
             let q_id = good.get_point_id(q);
-            let (tri_i_new, tri_b_new) = triangle_count_new_points(ORIGIN, p, q);
-            let n_g_delta = tri_i_new + tri_b_new;
-            let edge_len = (p - q).norm();
-            let target_dto = good.get_dto(q).0;
-
-            adjacency_list[i].push(EdgeInfo {
-                target_id: q_id,
-                n_g_delta,
-                edge_len,
-                target_dto,
-            });
+            adjacency_list[i].push(q_id);
         }
     }
 

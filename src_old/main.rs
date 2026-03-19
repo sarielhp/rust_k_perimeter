@@ -91,15 +91,15 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("Computing good and bad sets with width = {}...", l);
     let (mut good, bad_ch) = compute_good_set(&ch_m_exp, l as f64);
 
-    println!("Computing distance of good points to the origin...");
-    good.fill_dist_to_origin(&bad_ch);
-    println!("   ...done");
-
     let max_edge_l = max_edge_length(k);
     let dirs = crate::geom::generate_primitive_vectors(max_edge_l);
 
     println!("Building visibility graph...");
-    let vg = build_visibility_graph(&good, &bad_ch, &dirs, k);
+    let vg = build_visibility_graph(&good, &bad_ch, &dirs);
+
+    println!("Computing distance of good points to the origin...");
+    good.fill_dist_to_origin(&bad_ch);
+    println!("   ...done");
 
     let mut log = String::new();
 
