@@ -160,7 +160,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let filename_poly: String = format!("{}/{:05}_poly.txt", dir_polys, k);
     save_polygon(&filename_poly, &sol, Some(&log))?;
 
-    let filename_log: String = format!("{}/{:05}_summmary.txt", dir_summary, k);
+    let filename_log: String = format!("{}/{:05}_summary.txt", dir_summary, k);
     let mut log_fl = File::create(filename_log)?;
     writeln!(log_fl, "{}", &log)?;
 
