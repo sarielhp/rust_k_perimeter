@@ -14,10 +14,14 @@ use rustc_hash::FxHashMap;
 use std::cmp::Ordering;
 use std::collections::BinaryHeap;
 
+/// Key for the DP state.
+/// Represents a configuration by the current point (`loc_id`) and the number of grid points enclosed (`n_g`).
 #[repr(C)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, AnyBitPattern)]
 pub struct DPStateKey {
+    /// Index of the current point in the GridSet.
     pub loc_id: u32,
+    /// Total number of grid points enclosed by the polygon so far.
     pub n_g: u32,
 }
 
@@ -29,18 +33,25 @@ impl PartialOrd for DPStateKey {
 
 impl Ord for DPStateKey {
     fn cmp(&self, other: &Self) -> Ordering {
+        // Sort primarily by n_g to process configurations in a natural order for the DP.
         self.n_g.cmp(&other.n_g).then(self.loc_id.cmp(&other.loc_id))
     }
 }
 
+/// Value stored for each DP state.
+/// Tracks the optimal perimeter and the path for reconstruction.
 #[repr(C)]
 #[derive(Debug, Clone, Copy, PartialEq, PartialOrd, AnyBitPattern)]
 pub struct DPStateValue {
+    /// The key corresponding to this state.
     pub cfg: DPStateKey,
+    /// Minimum perimeter found to reach this configuration.
     pub perimeter_so_far: f64,
+    /// Index of the previous state in the `dp_vals` vector for solution reconstruction.
     pub prev_idx: u32,
 }
 
+/// Reconstructs the polygon vertices by following the `prev_idx` pointers.
 pub fn extract_solution(
     dp_vals: &MmapVec<DPStateValue>,
     best_sol_idx: u32,
@@ -244,26 +255,43 @@ impl QueueStrategy for NgDtoStrategy {
     }
 }
 
+/// Item stored in the priority queue.
 #[derive(Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub struct QueueItem<K: Ord> {
+    /// Sorting key determined by the selected `QueueStrategy`.
     key: K,
+    /// Current number of enclosed points.
     n_g: u32,
+    /// Index into the `dp_vals` vector.
     idx: usize,
 }
 
+/// Context passed around during the DP execution.
 pub struct DPContext<'a, K: Ord> {
+    /// Total number of configurations explored.
     pub conf_count: &'a mut i64,
+    /// Hash table for deduplication: maps (loc_id, n_g) to an index in `dp_vals`.
+    /// Uses a packed u64 key (loc_id << 32 | n_g) for performance.
     pub d_all: &'a mut FxHashMap<u64, u32>,
+    /// Persistent storage for DP values, potentially backed by a memory-mapped file.
     pub dp_vals: &'a mut MmapVec<DPStateValue>,
+    /// Priority queue of configurations to explore.
     pub pq: &'a mut BinaryHeap<QueueItem<K>>,
+    /// Global upper bound on the optimal perimeter found so far.
     pub opt_perim: &'a mut f64,
+    /// Index of the best complete solution found.
     pub best_sol_idx: &'a mut u32,
+    /// Target number of grid points to enclose.
     pub k: usize,
+    /// The set of valid grid points.
     pub good: &'a GridSet,
+    /// Bitmask for periodic status updates.
     pub mask: u32,
+    /// The visibility graph precalculated for the grid points.
     pub vg: &'a VisibilityGraph,
 }
 
+/// Prints current progress of the DP solver.
 fn print_info<S: QueueStrategy>(ctx: &DPContext<S::Key>, n_g: u32) {
     let used_bytes = ctx.dp_vals.len() * std::mem::size_of::<DPStateValue>();
     let cap_bytes = ctx.dp_vals.capacity() * std::mem::size_of::<DPStateValue>();
@@ -279,11 +307,13 @@ fn print_info<S: QueueStrategy>(ctx: &DPContext<S::Key>, n_g: u32) {
     );
 }
 
+/// Packs loc_id and n_g into a single u64 for efficient hashing.
 #[inline(always)]
 fn make_key(loc_id: u32, n_g: u32) -> u64 {
     ((loc_id as u64) << 32) | (n_g as u64)
 }
 
+/// Processes a single configuration by attempting to extend it with all visible neighbors.
 fn process_configuration<S: QueueStrategy>(ctx: &mut DPContext<S::Key>, cfg_idx: usize) {
     *ctx.conf_count += 1;
 
@@ -296,19 +326,23 @@ fn process_configuration<S: QueueStrategy>(ctx: &mut DPContext<S::Key>, cfg_idx:
         print_info::<S>(ctx, cfg.n_g);
     }
 
+    // Neighbors are pre-calculated in the visibility graph.
     let nbrs = &ctx.vg.adjacency_list[cfg.loc_id as usize];
 
     for edge in nbrs.iter() {
         let next_n_g = cfg.n_g + edge.n_g_delta;
+        // Optimization: early exit if too many grid points are enclosed.
         if next_n_g as usize > ctx.k {
             continue;
         }
 
         let next_perim = perimeter_so_far + edge.edge_len;
+        // Pruning: skip if the current path already exceeds the global best perimeter.
         if next_perim > *ctx.opt_perim {
             continue;
         }
 
+        // Admissibility heuristic: total_perim = perimeter so far + min distance back to origin.
         let total_perim = next_perim + edge.target_dto;
         if total_perim > *ctx.opt_perim {
             continue;
@@ -318,6 +352,7 @@ fn process_configuration<S: QueueStrategy>(ctx: &mut DPContext<S::Key>, cfg_idx:
         let mut f_queued = false;
         let mut existing_val_idx = u32::MAX;
         
+        // Deduplication: check if this (location, n_g) state was already reached with a better perimeter.
         if let Some(&idx) = ctx.d_all.get(&key) {
             existing_val_idx = idx;
             f_queued = true;
@@ -339,14 +374,17 @@ fn process_configuration<S: QueueStrategy>(ctx: &mut DPContext<S::Key>, cfg_idx:
 
         let push_idx;
         if existing_val_idx != u32::MAX {
+            // Update the existing state with the new, better perimeter.
             ctx.dp_vals[existing_val_idx as usize] = next_val;
             push_idx = existing_val_idx as usize;
         } else {
+            // Register a newly discovered state.
             push_idx = ctx.dp_vals.len();
             ctx.dp_vals.push(next_val).expect("push failed");
             ctx.d_all.insert(key, push_idx as u32);
         }
 
+        // Add to priority queue only if it's a new state or not currently queued.
         if !f_queued {
             ctx.pq.push(QueueItem {
                 key: S::compute_key(next_n_g, next_perim, push_idx, edge.target_id as u32, ctx.good),
@@ -355,6 +393,7 @@ fn process_configuration<S: QueueStrategy>(ctx: &mut DPContext<S::Key>, cfg_idx:
             });
         }
 
+        // If we've enclosed exactly k points, check if we've found a new global optimum.
         if next_n_g as usize == ctx.k {
             if total_perim < *ctx.opt_perim {
                 *ctx.opt_perim = total_perim;
@@ -364,6 +403,9 @@ fn process_configuration<S: QueueStrategy>(ctx: &mut DPContext<S::Key>, cfg_idx:
     }
 }
 
+/// Removes entries from d_all that have an enclosed point count less than min_n_g.
+/// Since configurations are processed in roughly increasing order of n_g, 
+/// older entries with lower n_g are unlikely to be part of an optimal solution.
 pub fn filter_d_all_by_n_g(d_all: &mut FxHashMap<u64, u32>, min_n_g: u32) {
     d_all.retain(|&key, _| (key as u32) >= min_n_g);
 }

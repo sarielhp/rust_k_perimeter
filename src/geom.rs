@@ -1011,18 +1011,28 @@ pub fn compute_max_turn_angle(poly: &[Point2D]) -> f64 {
     max_angle_rad
 }
 
+/// Precalculated information about an edge in the visibility graph.
+/// Storing these values avoids redundant geometric calculations during DP.
 #[derive(Debug, Clone, Copy)]
 pub struct EdgeInfo {
+    /// ID of the target point in the GridSet.
     pub target_id: usize,
+    /// Number of new grid points enclosed when adding this edge to the polygon.
     pub n_g_delta: u32,
+    /// Euclidean length of the edge.
     pub edge_len: f64,
+    /// Minimum Euclidean distance from the target point back to the origin.
     pub target_dto: f64,
 }
 
+/// A graph where edges represent valid visibility segments between grid points.
 pub struct VisibilityGraph {
+    /// Adjacency list storing precalculated edge information for each point.
     pub adjacency_list: Vec<Vec<EdgeInfo>>,
 }
 
+/// Builds the visibility graph by checking visibility and orientation constraints for all potential edges.
+/// Also precalculates grid point counts (n_g) and distances for each valid edge.
 pub fn build_visibility_graph(
     good: &GridSet,
     bad_ch: &[Point2D],
