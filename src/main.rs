@@ -64,10 +64,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
     }
 
-    let k = match args[1].parse::<usize>() {
+    let k = match args[1].replace('_', "").parse::<usize>() {
         Ok(val) => val,
         Err(_) => {
-            println!("Error: '{}' is not a valid integer.", args[1]);
+            eprintln!("Error: Could not parse '{}' as a number.", args[1]);
             std::process::exit(1);
         }
     };
@@ -157,10 +157,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     writeln!(log, "# Running time in seconds: {}", duration.as_secs_f64())?;
     println!("Running time in seconds: {}", duration.as_secs_f64());
 
-    let filename_poly: String = format!("{}/{:05}_poly.txt", dir_polys, k);
+    let filename_poly: String = format!("{}/{:06}_poly.txt", dir_polys, k);
     save_polygon(&filename_poly, &sol, Some(&log))?;
 
-    let filename_log: String = format!("{}/{:05}_summary.txt", dir_summary, k);
+    let filename_log: String = format!("{}/{:06}_s.txt", dir_summary, k);
     let mut log_fl = File::create(filename_log)?;
     writeln!(log_fl, "{}", &log)?;
 

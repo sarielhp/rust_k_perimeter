@@ -13,3 +13,44 @@ run_if_missing() {
         echo "File '$target_file' already exists. Skipping command."
     fi
 }
+
+parse_int() {
+    # Remove all underscores from the input string
+    local clean_num="${1//_/}"
+    
+    # Check if the result is actually a valid integer
+    if [[ "$clean_num" =~ ^-?[0-9]+$ ]]; then
+        echo "$clean_num"
+    else
+        echo "Error: '$1' is not a valid integer" >&2
+        return 1
+    fi
+}
+
+function  run_on() {
+    num=$(parse_int $1)
+    echo $num
+    FL=$(printf "output/summary/%06d_s.txt" $num)
+
+    if  [[ -e $FL ]]; then
+        return
+    fi
+
+    cargo run --release  -- $num
+#    echo $FL
+}
+
+run_on         10
+run_on         20
+run_on         50
+run_on        100
+run_on        500
+run_on      1_000
+run_on      5_000
+run_on     10_000
+run_on     20_000
+run_on     30_000
+run_on     40_000
+run_on     50_000
+run_on    100_000
+#run_on    200_000

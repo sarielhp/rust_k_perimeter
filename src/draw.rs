@@ -52,7 +52,7 @@ pub fn draw_polygon_with_grid(
     ub_circle: f64,
     good: &GridSet,
 ) {
-    let filename: String = format!("{}/{:05}.pdf", dir_pdfs, k);
+    let filename: String = format!("{}/{:06}.pdf", dir_pdfs, k);
 
     let (min_x, max_x, _min_y_2, max_y) = bound(&[poly, poly_circ, poly_circ_exp], 3);
     let min_y = 0;
