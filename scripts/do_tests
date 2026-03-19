@@ -1,0 +1,15 @@
+#! /bin/bash
+
+run_if_missing() {
+    local target_file="$1"
+    local command_to_run="$2"
+
+    # -e checks if the file exists (including directories)
+    # Use -f if you specifically want to check for a regular file
+    if [[ ! -e "$target_file" ]]; then
+        echo "File '$target_file' not found. Executing: $command_to_run"
+        eval "$command_to_run"
+    else
+        echo "File '$target_file' already exists. Skipping command."
+    fi
+}

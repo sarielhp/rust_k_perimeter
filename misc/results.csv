@@ -1,0 +1,12 @@
+File Path,k_value,Running_Time_Sec
+output/summary/00010_summary.txt,10,0.020079504
+output/summary/00050_summary.txt,50,0.024592141
+output/summary/00100_summary.txt,100,0.031884103
+output/summary/00500_summary.txt,500,0.137786002
+output/summary/01000_summary.txt,1000,0.329167864
+output/summary/05000_summary.txt,5000,7.650235405
+output/summary/10000_summary.txt,10000,61.908246103
+output/summary/50000_summary.txt,50000,1282.884761558
+output/summary/100000_summary.txt,100000,3912.271081083
+output/summary/200000_summary.txt,200000,17698.426912912
+output/summary/300000_summary.txt,300000,29233.848577118
