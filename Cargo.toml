@@ -24,6 +24,3 @@ cached = "0.58.0"
 name = "rust_k_perimeter"
 path = "src/main.rs"
 
-[[bin]]
-name = "rust_k_perimeter_old"
-path = "src_old/main.rs"
