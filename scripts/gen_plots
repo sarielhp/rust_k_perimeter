@@ -1,0 +1,42 @@
+#! /bin/bash
+
+SCRIPT_DIR=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" &> /dev/null && pwd)
+PARENT_DIR=$(dirname "$SCRIPT_DIR")
+cd $PARENT_DIR
+
+if  [[ ! -e output/summary ]]; then
+    echo "Unable to find output directory!"
+    exit -1
+fi
+
+find output/summary -iname "*.txt" | sort > misc/summary_files.txt
+
+echo -e "\n\n"
+echo "-----------------------------------------------"
+echo "Extracting running times into misc/results.csv"
+scripts/extract_running_time.jl
+
+echo -e "\n\n"
+echo "-----------------------------------------------"
+echo "Generating plots... (patience)"
+scripts/generate_plot.jl
+
+echo "-----------------------------------------------"
+echo "Generating table"
+scripts/generate_table_3.jl >& misc/rt_table.tex
+
+echo -e "\n\n"
+echo "-----------------------------------------------"
+echo "Generated:"
+echo "        plots/fit_curve.pdf"
+echo "        plots/mse_search.pdf"
+echo "-----------------------------------------------"
+
+
+DPAPER=~/papers/26/k_grid_points/figs/
+cp plots/*.pdf  $DPAPER
+cp misc/rt_table.tex $DPAPER
+
+echo "-----------------------------------------------"
+echo "Copied to $DPAPER"
+
