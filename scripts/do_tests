@@ -36,6 +36,8 @@ function  run_on() {
         return
     fi
 
+    echo -e "\n\n\n\n\n\n"
+    echo "k: $num"
     cargo run --release  -- $num
 #    echo $FL
 }
@@ -52,5 +54,16 @@ run_on     20_000
 run_on     30_000
 run_on     40_000
 run_on     50_000
+run_on     60_000
+run_on     70_000
+run_on     80_000
+run_on     90_000
 run_on    100_000
-#run_on    200_000
+run_on    150_000
+run_on    200_000
+run_on    250_000
+run_on    300_000
+run_on    350_000
+run_on    400_000
+run_on    450_000
+run_on    500_000
