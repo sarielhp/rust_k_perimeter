@@ -6,9 +6,7 @@ use std::cmp::max;
 
 use mmap_vec::MmapVec;
 
-use crate::geom::{
-    GridSet, VisibilityGraph
-};
+use crate::geom::{GridSet, VisibilityGraph};
 use num_format::{Locale, ToFormattedString};
 use rustc_hash::FxHashMap;
 use std::cmp::Ordering;
@@ -34,7 +32,9 @@ impl PartialOrd for DPStateKey {
 impl Ord for DPStateKey {
     fn cmp(&self, other: &Self) -> Ordering {
         // Sort primarily by n_g to process configurations in a natural order for the DP.
-        self.n_g.cmp(&other.n_g).then(self.loc_id.cmp(&other.loc_id))
+        self.n_g
+            .cmp(&other.n_g)
+            .then(self.loc_id.cmp(&other.loc_id))
     }
 }
 
@@ -351,7 +351,7 @@ fn process_configuration<S: QueueStrategy>(ctx: &mut DPContext<S::Key>, cfg_idx:
         let key = make_key(edge.target_id as u32, next_n_g);
         let mut f_queued = false;
         let mut existing_val_idx = u32::MAX;
-        
+
         // Deduplication: check if this (location, n_g) state was already reached with a better perimeter.
         if let Some(&idx) = ctx.d_all.get(&key) {
             existing_val_idx = idx;
@@ -387,7 +387,13 @@ fn process_configuration<S: QueueStrategy>(ctx: &mut DPContext<S::Key>, cfg_idx:
         // Add to priority queue only if it's a new state or not currently queued.
         if !f_queued {
             ctx.pq.push(QueueItem {
-                key: S::compute_key(next_n_g, next_perim, push_idx, edge.target_id as u32, ctx.good),
+                key: S::compute_key(
+                    next_n_g,
+                    next_perim,
+                    push_idx,
+                    edge.target_id as u32,
+                    ctx.good,
+                ),
                 n_g: next_n_g,
                 idx: push_idx,
             });
@@ -404,7 +410,7 @@ fn process_configuration<S: QueueStrategy>(ctx: &mut DPContext<S::Key>, cfg_idx:
 }
 
 /// Removes entries from d_all that have an enclosed point count less than min_n_g.
-/// Since configurations are processed in roughly increasing order of n_g, 
+/// Since configurations are processed in roughly increasing order of n_g,
 /// older entries with lower n_g are unlikely to be part of an optimal solution.
 pub fn filter_d_all_by_n_g(d_all: &mut FxHashMap<u64, u32>, min_n_g: u32) {
     d_all.retain(|&key, _| (key as u32) >= min_n_g);
@@ -442,7 +448,11 @@ pub fn minimize_perimeter_dp<S: QueueStrategy>(
         idx: 0,
     });
 
-    let hint_size = if k > 100000 { 100_000_000 } else { std::cmp::min(2 * k * k, 10_000_000) };
+    let hint_size = if k > 100000 {
+        100_000_000
+    } else {
+        std::cmp::min(2 * k * k, 10_000_000)
+    };
     let mut threshold = std::cmp::min(k * 100, 10_000_000);
 
     let mut d_all = FxHashMap::default();
@@ -477,7 +487,11 @@ pub fn minimize_perimeter_dp<S: QueueStrategy>(
         if item.is_none() {
             break;
         }
-        let QueueItem { n_g: curr_n_g, idx: popped_idx, .. } = item.unwrap();
+        let QueueItem {
+            n_g: curr_n_g,
+            idx: popped_idx,
+            ..
+        } = item.unwrap();
 
         let mut ids = vec![popped_idx];
         while let Some(next_item) = ctx.pq.peek() {
