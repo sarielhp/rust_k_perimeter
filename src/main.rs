@@ -107,7 +107,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     writeln!(log, "# Good points: {}", good.length())?;
     println!("# Good points: {}", good.length());
 
-    let Ok((sol, ub_circle)) = (if queue_strategy == "perim_ng" {
+    let Ok((sol, ub_circle, conf_count)) = (if queue_strategy == "perim_ng" {
         minimize_perimeter_dp::<PerimThenNgStrategy>(k, &good, &vg)
     } else if queue_strategy == "ng_idx" {
         minimize_perimeter_dp::<NgThenIdxStrategy>(k, &good, &vg)
@@ -134,9 +134,11 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     writeln!(log, "# Perimeter        : {}", perimeter)?;
     writeln!(log, "# circle perimeter : {}", ch_m_perimeter)?;
     writeln!(log, "# Naive perimeter  : {}", ub_circle)?;
+    writeln!(log, "# Configs computed  : {}", conf_count)?;
     println!("Perimeter        : {}", perimeter);
     println!("circle perimeter : {}", ch_m_perimeter);
     println!("Naive perimeter  : {}", ub_circle);
+    println!("Configs computed  : {}", conf_count);
     let c_max_angle = compute_max_turn_angle(&sol);
 
     assert!(

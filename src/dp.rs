@@ -424,7 +424,7 @@ pub fn minimize_perimeter_dp<S: QueueStrategy>(
     k: usize,
     good: &GridSet,
     vg: &VisibilityGraph,
-) -> anyhow::Result<(Vec<Point2D>, f64)> {
+) -> anyhow::Result<(Vec<Point2D>, f64, i64)> {
     let sqrt_k = (k as f64).sqrt().ceil() as u32 + 1;
     let ub_circle = 2.0 * (std::f64::consts::PI * (k as f64)).sqrt();
     let sq_perim = (4 * sqrt_k + 6) as f64;
@@ -516,5 +516,5 @@ pub fn minimize_perimeter_dp<S: QueueStrategy>(
 
     println!("# of configurations generated: {}", *ctx.conf_count);
     let sol = extract_solution(&ctx.dp_vals, *ctx.best_sol_idx, ctx.good);
-    Ok((sol, ub_circle))
+    Ok((sol, ub_circle, *ctx.conf_count))
 }
