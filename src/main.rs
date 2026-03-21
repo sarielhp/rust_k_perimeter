@@ -22,6 +22,8 @@ use std::fs::File;
 use std::io::Write;
 use std::time::Instant;
 
+use crate::geom::{boundary_grid_points, polygon_area};
+
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let start = Instant::now();
     let args: Vec<String> = env::args().collect();
@@ -129,16 +131,36 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("k: {}", k);
 
     let perimeter = compute_perimeter(&sol);
+    let area = polygon_area(&sol);
+    let b_n = boundary_grid_points(&sol);
+
+    let v_n = sol.len();
+
+    // Pick's theorem:  A= I + B/2 -1
+    // As k = I + B, we have I = k - B, so A = k - B + B/2 - 1 = k - B/2 - 1
+    // A = k - B/2 - 1
+    if (area - (k as f64) + (b_n as f64) / 2.0 + 1.0).abs() > 1e-6 {
+        panic!("Area not computed correctly");
+    }
+
     draw_polygon_with_grid(dir_pdfs, &sol, &ch_m, &ch_m_exp, k, ub_circle, &good);
     let ch_m_perimeter = compute_perimeter(&ch_m);
-    writeln!(log, "# Perimeter        : {}", perimeter)?;
-    writeln!(log, "# circle perimeter : {}", ch_m_perimeter)?;
-    writeln!(log, "# Naive perimeter  : {}", ub_circle)?;
-    writeln!(log, "# Configs computed  : {}", conf_count)?;
-    println!("Perimeter        : {}", perimeter);
-    println!("circle perimeter : {}", ch_m_perimeter);
-    println!("Naive perimeter  : {}", ub_circle);
-    println!("Configs computed  : {}", conf_count);
+    writeln!(log, "# Perimeter            : {}", perimeter)?;
+    writeln!(log, "# circle perimeter     : {}", ch_m_perimeter)?;
+    writeln!(log, "# Naive perimeter      : {}", ub_circle)?;
+    writeln!(log, "# Area                 : {}", area)?;
+    writeln!(log, "# vertices             : {}", v_n)?;
+    writeln!(log, "# boundary grid points : {}", b_n)?;
+    writeln!(log, "# Configs computed     : {}", conf_count)?;
+
+    println!("# Perimeter            : {}", perimeter);
+    println!("# circle perimeter     : {}", ch_m_perimeter);
+    println!("# Naive perimeter      : {}", ub_circle);
+    println!("# Area                 : {}", area);
+    println!("# vertices             : {}", v_n);
+    println!("# boundary grid points : {}", b_n);
+    println!("# Configs computed     : {}", conf_count);
+
     let c_max_angle = compute_max_turn_angle(&sol);
 
     assert!(

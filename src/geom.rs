@@ -171,6 +171,20 @@ pub fn grid_points_inside_edge(u: Point2D, v: Point2D) -> u32 {
     (t - 1) as u32
 }
 
+pub fn boundary_grid_points(poly: &[Point2D]) -> u32 {
+    let n = poly.len();
+    if n < 3 {
+        return n as u32; // For degenerate cases, just the vertices
+    }
+    let mut total = n as u32;
+    for i in 0..n {
+        let a = poly[i];
+        let b = poly[(i + 1) % n];
+        total += grid_points_inside_edge(a, b);
+    }
+    total
+}
+
 pub fn convex_hull(points: &[Point2D]) -> Vec<Point2D> {
     let n = points.len();
     if n <= 2 {
@@ -446,7 +460,8 @@ pub fn triangle_count_new_points(a: Point2D, b: Point2D, c: Point2D) -> (u32, u3
     let ac_g_n = grid_points_inside_edge(a, c);
 
     // Use u64 to prevent overflow in boundary calculation
-    let boundary_n: u64 = ab_g_n as u64 + bc_g_n as u64 + ac_g_n as u64 + count_distinct(a, b, c) as u64;
+    let boundary_n: u64 =
+        ab_g_n as u64 + bc_g_n as u64 + ac_g_n as u64 + count_distinct(a, b, c) as u64;
 
     let tri_i_new = if area2 > 0 {
         let area_i64 = area2 as i64;

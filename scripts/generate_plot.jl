@@ -27,8 +27,8 @@ function run_split_pdf_analysis(filename)
     xdata = Float64.(df[:, 2])
     ydata = Float64.(df[:, 3])
 
-    # 3. Grid Search (1.5 to 3.0 in steps of 0.05)
-    test_degrees = 1.0:0.01:3.0
+    # 3. Grid Search (0.3 to 3.0 in steps of 0.05)
+    test_degrees = 0.3:0.01:3.0
     best_mse = Inf
     best_p = [1.0, 1.0, 0.0] 
     mses = Float64[]

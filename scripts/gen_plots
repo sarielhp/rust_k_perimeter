@@ -19,7 +19,7 @@ scripts/extract_running_time.jl
 echo -e "\n\n"
 echo "-----------------------------------------------"
 echo "Generating plots... (patience)"
-scripts/generate_plot.jl
+scripts/log_fit.jl
 
 echo "-----------------------------------------------"
 echo "Generating table"
@@ -28,13 +28,12 @@ scripts/generate_table_3.jl >& misc/rt_table.tex
 echo -e "\n\n"
 echo "-----------------------------------------------"
 echo "Generated:"
-echo "        plots/fit_curve.pdf"
-echo "        plots/mse_search.pdf"
+echo "        plots/rt_fit.pdf"
 echo "-----------------------------------------------"
 
 
 DPAPER=~/papers/26/k_grid_points/figs/
-cp plots/*.pdf  $DPAPER
+cp plots/rt_fit.pdf  $DPAPER
 cp misc/rt_table.tex $DPAPER
 
 echo "-----------------------------------------------"

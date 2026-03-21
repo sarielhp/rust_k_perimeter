@@ -42,33 +42,9 @@ function  run_on() {
 #    echo $FL
 }
 
-run_on         10
-run_on         20
-run_on         50
-run_on        100
-run_on        500
-run_on      1_000
-run_on      5_000
-run_on     10_000
-run_on     20_000
-run_on     30_000
-run_on     40_000
-run_on     50_000
-run_on     60_000
-run_on     70_000
-run_on     80_000
-run_on     90_000
-run_on    100_000
-run_on    150_000
-run_on    200_000
-run_on    250_000
-run_on    300_000
-run_on    350_000
-run_on    400_000
-run_on    450_000
-run_on    500_000
-run_on    600_000
-run_on    700_000
-run_on    800_000
-run_on    900_000
-run_on  1_000_000
+for i in {3..4000}
+do
+   echo "Number: $i"
+   run_on         $i
+done
+
