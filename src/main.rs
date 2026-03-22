@@ -22,7 +22,7 @@ use std::fs::File;
 use std::io::Write;
 use std::time::Instant;
 
-use crate::geom::{boundary_grid_points, polygon_area};
+use crate::geom::{boundary_grid_points, polygon_area, polygon_rm_redundant_vertices};
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let start = Instant::now();
@@ -130,12 +130,26 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     println!("k: {}", k);
 
+    let sol_c = polygon_rm_redundant_vertices(&sol);
+
     let perimeter = compute_perimeter(&sol);
     let area = polygon_area(&sol);
-    let b_n = boundary_grid_points(&sol);
+    let perimeter_c = compute_perimeter(&sol_c);
+    let area_c = polygon_area(&sol_c);
+    let b_n = boundary_grid_points(&sol_c);
 
-    let v_n = sol.len();
+    assert!((area - area_c).abs() < 1e-6, "Something is wrong with area");
+    assert!(
+        (perimeter - perimeter_c).abs() < 1e-6,
+        "Something is wrong with perimeter"
+    );
 
+    let v_n = sol_c.len();
+    //let v_n_o = sol.len();
+
+    /*if v_n != v_n_o {
+        println!("Removed Redundant vertices");
+    }*/
     // Pick's theorem:  A= I + B/2 -1
     // As k = I + B, we have I = k - B, so A = k - B + B/2 - 1 = k - B/2 - 1
     // A = k - B/2 - 1

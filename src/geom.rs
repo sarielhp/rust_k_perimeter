@@ -300,6 +300,53 @@ fn translate_v_points(points: Vec<Point2D>, avg: Point2D) -> Vec<Point2D> {
         .collect()
 }
 
+pub fn is_point_on_segment(a: Point2D, b: Point2D, c: Point2D) -> bool {
+    // check collinear a,b,c
+    let cross = (b.x as i64 - a.x as i64) * (c.y as i64 - a.y as i64)
+        - (b.y as i64 - a.y as i64) * (c.x as i64 - a.x as i64);
+    if cross != 0 {
+        return false;
+    }
+
+    // degenerate segment case: a == c
+    if a == c {
+        return b == a;
+    }
+
+    let min_x = a.x.min(c.x);
+    let max_x = a.x.max(c.x);
+    let min_y = a.y.min(c.y);
+    let max_y = a.y.max(c.y);
+
+    b.x >= min_x && b.x <= max_x && b.y >= min_y && b.y <= max_y
+}
+
+pub fn polygon_rm_redundant_vertices(poly: &[Point2D]) -> Vec<Point2D> {
+    let n = poly.len();
+    if n <= 2 {
+        return poly.to_vec();
+    }
+
+    let mut out = Vec::with_capacity(n);
+    for i in 0..n {
+        let prev = poly[(i + n - 1) % n];
+        let cur = poly[i];
+        let next = poly[(i + 1) % n];
+
+        if !is_point_on_segment(prev, cur, next) {
+            out.push(cur);
+        }
+    }
+
+    // If the polygon degenerates to an empty cycle due to all points collinear,
+    // retain at least the first and last unique points, for safety.
+    if out.is_empty() && !poly.is_empty() {
+        out.push(poly[0]);
+    }
+
+    out
+}
+
 pub fn ch_disk_origin(k: usize, f_expand: bool) -> Vec<Point2D> {
     let r = ((k as f64) / std::f64::consts::PI).sqrt() + 2.0;
 

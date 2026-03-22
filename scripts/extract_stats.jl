@@ -5,7 +5,7 @@ using DataFrames, CSV
 # --- Configuration ---
 const DEFAULT_INPUT_DIR = "output/summary"
 const DEFAULT_OUTPUT_FILE = "misc/extracted_data.csv"
-const TRIGGER_LINE = "# Configs computed"
+const TRIGGER_LINE = "# Area"
 
 """
 Smart parser that preserves large integers as Int128 
