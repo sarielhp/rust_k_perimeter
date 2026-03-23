@@ -5,7 +5,7 @@ using DataFrames, CSV
 # --- Configuration ---
 const DEFAULT_INPUT_DIR = "output/summary"
 const DEFAULT_OUTPUT_FILE = "misc/extracted_data.csv"
-const TRIGGER_LINE = "# Area"
+const TRIGGER_LINE = "# k:"
 
 """
 Smart parser that preserves large integers as Int128 
@@ -32,12 +32,17 @@ function parse_metrics_file(file_path::String)
         return nothing
     end
 
-    labels = [strip(m[1]) for m in eachmatch(r"#\s*(.*?)\s*:", content)]
+    data = Dict{String, Any}()
+    for line in split(content, '\n')
+        m = match(r"#\s*([^:]+?)\s*:\s*(.*)", line)
+        if !isnothing(m)
+            label = strip(m[1])
+            value_str = strip(m[2])
+            data[label] = smart_parse(value_str)
+        end
+    end
     
-    # Use our smart_parse instead of direct Float64 parsing
-    numbers = [smart_parse(m.match) for m in eachmatch(r"[-+]?\d*\.?\d+([eE][-+]?\d+)?", content)]
-    
-    return (labels=labels, numbers=numbers)
+    return isempty(data) ? nothing : data
 end
 
 function (@main)(args)
@@ -48,8 +53,7 @@ function (@main)(args)
         return 1
     end
 
-    all_rows = Vector{Vector{Any}}() # Changed to Any to hold mixed Int/Float
-    column_names = String[]
+    all_data_raw = Vector{Dict{String, Any}}()
 
     files = filter(f -> isfile(joinpath(input_dir, f)) && !startswith(f, "."), readdir(input_dir))
 
@@ -58,22 +62,39 @@ function (@main)(args)
         result = parse_metrics_file(full_path)
 
         if !isnothing(result)
-            if isempty(column_names)
-                column_names = result.labels
-            end
-            push!(all_rows, result.numbers)
+            push!(all_data_raw, result)
         end
     end
 
-    if isempty(all_rows)
+    if isempty(all_data_raw)
         println("No valid data found.")
         return 0
     end
 
-    # Build DataFrame
-    df = DataFrame(reduce(hcat, all_rows)', column_names)
+    # Collect all unique keys
+    all_keys = Set{String}()
+    for d in all_data_raw
+        for k in keys(d)
+            push!(all_keys, k)
+        end
+    end
 
-    # Sort by the first column (handles Int128 vs Float64 comparison automatically)
+    # Standardize dictionaries by filling missing keys with missing
+    all_data = [Dict(k => get(d, k, missing) for k in all_keys) for d in all_data_raw]
+
+    # Build DataFrame from vector of dicts
+    df = DataFrame(all_data)
+
+    # Reorder columns: 'k' first, then others alphabetically
+    cols = names(df)
+    if "k" in cols
+        other_cols = sort(filter(c -> c != "k", cols))
+        select!(df, vcat(["k"], other_cols))
+    else
+        select!(df, sort(cols))
+    end
+
+    # Sort by the first column ('k')
     sort!(df, 1)
 
     # CSV.write preserves the integer formatting in the output file

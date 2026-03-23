@@ -42,7 +42,7 @@ function  run_on() {
 #    echo $FL
 }
 
-for i in {3..4000}
+for i in {3..10000}
 do
    echo "Number: $i"
    run_on         $i
