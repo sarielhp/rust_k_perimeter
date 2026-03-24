@@ -1077,14 +1077,16 @@ pub fn compute_max_turn_angle(poly: &[Point2D]) -> f64 {
 /// Storing these values avoids redundant geometric calculations during DP.
 #[derive(Debug, Clone, Copy)]
 pub struct EdgeInfo {
-    /// ID of the target point in the GridSet.
-    pub target_id: usize,
-    /// Number of new grid points enclosed when adding this edge to the polygon.
-    pub n_g_delta: u32,
+    /// Estimated minimum total perimeter if this edge is taken (edge_len + target_dto).
+    pub total_perim_contribution: f64,
     /// Euclidean length of the edge.
     pub edge_len: f64,
-    /// Minimum Euclidean distance from the target point back to the origin.
-    pub target_dto: f64,
+    /// ID of the target point in the GridSet.
+    pub target_id: u32,
+    /// Number of new grid points enclosed when adding this edge to the polygon.
+    pub n_g_delta: u32,
+    /// Minimum number of grid points enclosed by a path from the target back to the origin.
+    pub target_dtog: u32,
 }
 
 /// A graph where edges represent valid visibility segments between grid points.
@@ -1152,15 +1154,22 @@ pub fn build_visibility_graph(
             let (tri_i_new, tri_b_new) = triangle_count_new_points(ORIGIN, p, q);
             let n_g_delta = tri_i_new + tri_b_new;
             let edge_len = (p - q).norm();
-            let target_dto = good.get_dto(q).0;
+            let (target_dto, target_dtog) = good.get_dto(q);
 
             adjacency_list[i].push(EdgeInfo {
-                target_id: q_id,
+                target_id: q_id as u32,
                 n_g_delta,
+                target_dtog: target_dtog as u32,
                 edge_len,
-                target_dto,
+                total_perim_contribution: edge_len + target_dto,
             });
         }
+        // Sort edges by total_perim_contribution to allow early exit during DP.
+        adjacency_list[i].sort_by(|a, b| {
+            a.total_perim_contribution
+                .partial_cmp(&b.total_perim_contribution)
+                .unwrap_or(std::cmp::Ordering::Equal)
+        });
     }
 
     VisibilityGraph { adjacency_list }
