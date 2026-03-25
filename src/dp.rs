@@ -103,6 +103,8 @@ pub trait QueueStrategy {
         loc_id: u32,
         good: &GridSet,
     ) -> Self::Key;
+    fn get_cleanup_val(n_g: u32, loc_id: u32, good: &GridSet) -> u32;
+    fn filter_d_all(d_all: &mut FxHashMap<u64, u32>, min_val: u32, good: &GridSet);
 }
 
 pub struct NgThenPerimStrategy;
@@ -125,6 +127,50 @@ impl QueueStrategy for NgThenPerimStrategy {
             std::cmp::Reverse(OrderedFloat(perimeter_so_far)),
             std::cmp::Reverse(idx),
         )
+    }
+
+    fn get_cleanup_val(n_g: u32, _loc_id: u32, _good: &GridSet) -> u32 {
+        n_g
+    }
+
+    fn filter_d_all(d_all: &mut FxHashMap<u64, u32>, min_n_g: u32, _good: &GridSet) {
+        d_all.retain(|&key, _| (key as u32) >= min_n_g);
+    }
+}
+
+pub struct TopoThenNgStrategy;
+impl QueueStrategy for TopoThenNgStrategy {
+    type Key = (
+        std::cmp::Reverse<u32>,
+        std::cmp::Reverse<u32>,
+        std::cmp::Reverse<OrderedFloat>,
+        std::cmp::Reverse<usize>,
+    );
+
+    fn compute_key(
+        n_g: u32,
+        perimeter_so_far: f64,
+        idx: usize,
+        loc_id: u32,
+        good: &GridSet,
+    ) -> Self::Key {
+        (
+            std::cmp::Reverse(good.get_topo_idx(loc_id as usize)),
+            std::cmp::Reverse(n_g),
+            std::cmp::Reverse(OrderedFloat(perimeter_so_far)),
+            std::cmp::Reverse(idx),
+        )
+    }
+
+    fn get_cleanup_val(_n_g: u32, loc_id: u32, good: &GridSet) -> u32 {
+        good.get_topo_idx(loc_id as usize)
+    }
+
+    fn filter_d_all(d_all: &mut FxHashMap<u64, u32>, min_topo_idx: u32, good: &GridSet) {
+        d_all.retain(|&key, _| {
+            let loc_id = (key >> 32) as u32;
+            good.get_topo_idx(loc_id as usize) >= min_topo_idx
+        });
     }
 }
 
@@ -149,6 +195,14 @@ impl QueueStrategy for PerimThenNgStrategy {
             std::cmp::Reverse(idx),
         )
     }
+
+    fn get_cleanup_val(n_g: u32, _loc_id: u32, _good: &GridSet) -> u32 {
+        n_g
+    }
+
+    fn filter_d_all(d_all: &mut FxHashMap<u64, u32>, min_n_g: u32, _good: &GridSet) {
+        d_all.retain(|&key, _| (key as u32) >= min_n_g);
+    }
 }
 
 pub struct NgThenIdxStrategy;
@@ -163,6 +217,14 @@ impl QueueStrategy for NgThenIdxStrategy {
         _good: &GridSet,
     ) -> Self::Key {
         (std::cmp::Reverse(n_g), std::cmp::Reverse(idx))
+    }
+
+    fn get_cleanup_val(n_g: u32, _loc_id: u32, _good: &GridSet) -> u32 {
+        n_g
+    }
+
+    fn filter_d_all(d_all: &mut FxHashMap<u64, u32>, min_n_g: u32, _good: &GridSet) {
+        d_all.retain(|&key, _| (key as u32) >= min_n_g);
     }
 }
 
@@ -181,6 +243,14 @@ impl QueueStrategy for PerimThenIdxStrategy {
             std::cmp::Reverse(OrderedFloat(perimeter_so_far)),
             std::cmp::Reverse(idx),
         )
+    }
+
+    fn get_cleanup_val(n_g: u32, _loc_id: u32, _good: &GridSet) -> u32 {
+        n_g
+    }
+
+    fn filter_d_all(d_all: &mut FxHashMap<u64, u32>, min_n_g: u32, _good: &GridSet) {
+        d_all.retain(|&key, _| (key as u32) >= min_n_g);
     }
 }
 
@@ -207,6 +277,14 @@ impl QueueStrategy for NgPerimDtoStrategy {
             std::cmp::Reverse(idx),
         )
     }
+
+    fn get_cleanup_val(n_g: u32, _loc_id: u32, _good: &GridSet) -> u32 {
+        n_g
+    }
+
+    fn filter_d_all(d_all: &mut FxHashMap<u64, u32>, min_n_g: u32, _good: &GridSet) {
+        d_all.retain(|&key, _| (key as u32) >= min_n_g);
+    }
 }
 
 pub struct PerimNgDtogStrategy;
@@ -232,6 +310,14 @@ impl QueueStrategy for PerimNgDtogStrategy {
             std::cmp::Reverse(idx),
         )
     }
+
+    fn get_cleanup_val(n_g: u32, _loc_id: u32, _good: &GridSet) -> u32 {
+        n_g
+    }
+
+    fn filter_d_all(d_all: &mut FxHashMap<u64, u32>, min_n_g: u32, _good: &GridSet) {
+        d_all.retain(|&key, _| (key as u32) >= min_n_g);
+    }
 }
 
 pub struct NgDtoStrategy;
@@ -250,12 +336,19 @@ impl QueueStrategy for NgDtoStrategy {
         good: &GridSet,
     ) -> Self::Key {
         let loc = *good.get_point_by_id(loc_id as usize);
-        let dto = good.get_dto(loc).0;
         (
             std::cmp::Reverse(n_g),
-            std::cmp::Reverse(OrderedFloat(dto)),
+            std::cmp::Reverse(OrderedFloat(good.get_dto(loc).0)),
             std::cmp::Reverse(idx),
         )
+    }
+
+    fn get_cleanup_val(n_g: u32, _loc_id: u32, _good: &GridSet) -> u32 {
+        n_g
+    }
+
+    fn filter_d_all(d_all: &mut FxHashMap<u64, u32>, min_n_g: u32, _good: &GridSet) {
+        d_all.retain(|&key, _| (key as u32) >= min_n_g);
     }
 }
 
@@ -263,12 +356,15 @@ impl QueueStrategy for NgDtoStrategy {
 #[derive(Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub struct QueueItem<K: Ord> {
     /// Sorting key determined by the selected `QueueStrategy`.
-    key: K,
+    pub key: K,
     /// Current number of enclosed points.
-    n_g: u32,
+    pub n_g: u32,
     /// Index into the `dp_vals` vector.
-    idx: usize,
+    pub idx: usize,
+    /// Location ID of the current point.
+    pub loc_id: u32,
 }
+
 
 /// Context passed around during the DP execution.
 pub struct DPContext<'a, K: Ord> {
@@ -407,6 +503,7 @@ fn process_configuration<S: QueueStrategy>(ctx: &mut DPContext<S::Key>, cfg_idx:
                 ),
                 n_g: next_n_g,
                 idx: push_idx,
+                loc_id: edge.target_id as u32,
             });
         }
 
@@ -418,13 +515,6 @@ fn process_configuration<S: QueueStrategy>(ctx: &mut DPContext<S::Key>, cfg_idx:
             }
         }
     }
-}
-
-/// Removes entries from d_all that have an enclosed point count less than min_n_g.
-/// Since configurations are processed in roughly increasing order of n_g,
-/// older entries with lower n_g are unlikely to be part of an optimal solution.
-pub fn filter_d_all_by_n_g(d_all: &mut FxHashMap<u64, u32>, min_n_g: u32) {
-    d_all.retain(|&key, _| (key as u32) >= min_n_g);
 }
 
 pub fn max_edge_length(k: usize) -> u32 {
@@ -457,6 +547,7 @@ pub fn minimize_perimeter_dp<S: QueueStrategy>(
         key: S::compute_key(1, 0.0, 0, start_loc_id as u32, good),
         n_g: 1,
         idx: 0,
+        loc_id: start_loc_id as u32,
     });
 
     let hint_size = if k > 100000 {
@@ -503,12 +594,13 @@ pub fn minimize_perimeter_dp<S: QueueStrategy>(
         let QueueItem {
             n_g: curr_n_g,
             idx: popped_idx,
+            loc_id: popped_loc_id,
             ..
         } = item.unwrap();
 
         let mut ids = vec![popped_idx];
         while let Some(next_item) = ctx.pq.peek() {
-            if next_item.n_g == curr_n_g {
+            if next_item.n_g == curr_n_g && next_item.loc_id == popped_loc_id {
                 if let Some(matched_item) = ctx.pq.pop() {
                     ids.push(matched_item.idx);
                 }
@@ -518,7 +610,8 @@ pub fn minimize_perimeter_dp<S: QueueStrategy>(
         }
 
         if ctx.d_all.len() > threshold {
-            filter_d_all_by_n_g(&mut ctx.d_all, curr_n_g);
+            let cleanup_val = S::get_cleanup_val(curr_n_g, popped_loc_id, ctx.good);
+            S::filter_d_all(&mut ctx.d_all, cleanup_val, ctx.good);
             threshold = max(threshold, 3 * ctx.d_all.len() / 2);
         }
 

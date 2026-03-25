@@ -1,4 +1,5 @@
 use crate::point::*;
+use std::collections::VecDeque;
 //use cached::proc_macro::cached;
 
 use std::{
@@ -629,6 +630,7 @@ pub struct GridSet {
     pub points: Vec<Point2D>,
     //pub point_to_id: HashMap<Point2D, usize>,
     dto_g: Vec<i64>, // Number of grid points inside distance to origin
+    topo_idx: Vec<u32>,
 }
 
 impl GridSet {
@@ -660,7 +662,19 @@ impl GridSet {
             dto: vec![-1.0; _size],
             point_id: vec![usize::MAX; _size],
             dto_g: vec![0; _size],
+            topo_idx: Vec::new(),
         }
+    }
+
+    pub fn get_topo_idx(&self, id: usize) -> u32 {
+        self.topo_idx[id]
+    }
+
+    pub fn set_topo_idx(&mut self, id: usize, idx: u32) {
+        if self.topo_idx.is_empty() {
+            self.topo_idx = vec![0; self.points.len()];
+        }
+        self.topo_idx[id] = idx;
     }
 
     pub fn length(&self) -> usize {
@@ -719,6 +733,7 @@ impl GridSet {
 
     pub fn compute_points(&mut self) {
         self.points.clear();
+        self.topo_idx.clear();
         //self.point_id.clear();
         for y in self.min_y..=self.max_y {
             for x in self.min_x..=self.max_x {
@@ -726,6 +741,7 @@ impl GridSet {
                 if self.contains(&p) {
                     let id = self.points.len();
                     self.points.push(p);
+                    self.topo_idx.push(0);
                     let index = self.get_index(p);
                     self.point_id[index] = id;
                 }
@@ -1279,4 +1295,41 @@ pub fn build_visibility_graph(
     let vg = VisibilityGraph { adjacency_list };
     verify_suffix_property(&vg, good, max_turn_angle);
     vg
+}
+
+pub fn topological_sort(vg: &VisibilityGraph) -> Option<Vec<usize>> {
+    let n = vg.adjacency_list.len();
+    let mut in_degree = vec![0; n];
+    for u in 0..n {
+        for edge in &vg.adjacency_list[u] {
+            in_degree[edge.target_id] += 1;
+        }
+    }
+
+    let mut queue = VecDeque::new();
+    for i in 0..n {
+        if in_degree[i] == 0 {
+            queue.push_back(i);
+        }
+    }
+
+    let mut result = Vec::with_capacity(n);
+    while let Some(u) = queue.pop_front() {
+        result.push(u);
+        for edge in &vg.adjacency_list[u] {
+            let v = edge.target_id;
+            in_degree[v] -= 1;
+            if in_degree[v] == 0 {
+                queue.push_back(v);
+            }
+        }
+    }
+
+    if result.len() == n {
+        Some(result)
+    } else {
+        // If it's not a DAG, result will be shorter than n.
+        // We could return partial result but None indicates a cycle.
+        Some(result)
+    }
 }

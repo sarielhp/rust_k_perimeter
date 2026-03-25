@@ -7,6 +7,7 @@ mod polygon;
 use dp::{
     max_edge_length, minimize_perimeter_dp, NgDtoStrategy, NgPerimDtoStrategy, NgThenIdxStrategy,
     NgThenPerimStrategy, PerimNgDtogStrategy, PerimThenIdxStrategy, PerimThenNgStrategy,
+    TopoThenNgStrategy,
 };
 use draw::{compute_perimeter, draw_polygon_with_grid};
 use geom::{
@@ -28,7 +29,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let start = Instant::now();
     let args: Vec<String> = env::args().collect();
     if args.len() < 2 {
-        println!("Usage: k_perimeter [k] [--queue=strategy]");
+        println!("Usage: k_perimeter [k] [--queue=strategy] [--topo]");
         println!();
         println!("Arguments:");
         println!("  [k]               The number of grid points the polygon should enclose.");
@@ -36,9 +37,11 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             "  --no-cache        Disable the caching for the `is_all_left_turns` function call."
         );
         println!("  --queue=strategy  Select the priority queue ordering strategy.");
+        println!("  --topo            Build visibility graph, perform topological sort, output vertices to output/topo.txt and exit.");
         println!();
         println!("Available queue strategies:");
-        println!("  ng_idx        (default) Sort by n_g (ascending), then queue insertion index.");
+        println!("  topo_ng       (default) Sort by topological index (ascending), then n_g (ascending).");
+        println!("  ng_idx        Sort by n_g (ascending), then queue insertion index.");
         println!("  ng_perim_dto            Sort by n_g (ascending), then (perimeter + DTO).");
         println!("  ng_perim                Sort by n_g (ascending), then perimeter (ascending).");
         println!("  perim_ng                Sort by perimeter (ascending), then n_g (ascending).");
@@ -59,10 +62,14 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     std::fs::create_dir_all(dir_polys).unwrap_or_default();
     std::fs::create_dir_all(dir_summary).unwrap_or_default();
 
-    let mut queue_strategy = "ng_idx".to_string();
+    let mut queue_strategy = "topo_ng".to_string();
+    let mut topo_mode = false;
     for arg in args.iter().skip(1) {
         if arg.starts_with("--queue=") {
-            queue_strategy = arg.split('=').nth(1).unwrap_or("ng_perim_dto").to_string();
+            queue_strategy = arg.split('=').nth(1).unwrap_or("topo_ng").to_string();
+        }
+        if arg == "--topo" {
+            topo_mode = true;
         }
     }
 
@@ -103,7 +110,43 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("max_turn_angle: {}", max_turn_angle);
 
     println!("Building visibility graph...");
-    let vg = build_visibility_graph(&good, &bad_ch, &dirs, k, max_turn_angle);
+    let mut vg = build_visibility_graph(&good, &bad_ch, &dirs, k, max_turn_angle);
+
+    if topo_mode || queue_strategy == "topo_ng" {
+        println!("Performing topological sort...");
+        let origin = Point2D::new(0, 0);
+        if good.contains(&origin) {
+            let origin_id = good.get_point_id(origin);
+            for edges in vg.adjacency_list.iter_mut() {
+                edges.retain(|e| e.target_id != origin_id);
+            }
+        }
+
+        if let Some(topo_order) = crate::geom::topological_sort(&vg) {
+            for (idx, &id) in topo_order.iter().enumerate() {
+                good.set_topo_idx(id, idx as u32);
+            }
+
+            if topo_mode {
+                let mut fl = File::create("output/topo.txt")?;
+                for id in &topo_order {
+                    let p = good.get_point_by_id(*id);
+                    writeln!(fl, "{} {}", p.x, p.y)?;
+                }
+                println!(
+                    "Topological order written to output/topo.txt. Points in topo order: {} / {}",
+                    topo_order.len(),
+                    good.num_points()
+                );
+                return Ok(());
+            }
+        } else {
+            if queue_strategy == "topo_ng" {
+                eprintln!("Error: Visibility graph is not a DAG, cannot use topo_ng strategy.");
+                std::process::exit(1);
+            }
+        }
+    }
 
     let mut log = String::new();
 
@@ -113,6 +156,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let Ok((sol, ub_circle, conf_count)) = (if queue_strategy == "perim_ng" {
         minimize_perimeter_dp::<PerimThenNgStrategy>(k, &good, &vg)
+    } else if queue_strategy == "topo_ng" {
+        minimize_perimeter_dp::<TopoThenNgStrategy>(k, &good, &vg)
     } else if queue_strategy == "ng_idx" {
         minimize_perimeter_dp::<NgThenIdxStrategy>(k, &good, &vg)
     } else if queue_strategy == "perim_idx" {
@@ -165,7 +210,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Explicitly tell the closure it returns a compatible Result
     let mut log_and_print = |label: &str, value: &dyn std::fmt::Display| -> Result<(), Box<dyn std::error::Error>> {
         writeln!(log, "# {:23} : {}", label, value)?;
-        println!("# {:22} : {}", label, value);
+        println!("# {:23} : {}", label, value);
 
         Ok(())
     };
