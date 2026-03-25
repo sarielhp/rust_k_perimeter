@@ -4,40 +4,66 @@ using CSV
 using DataFrames
 using Printf
 
-function format_commas(n::Integer)
-    s = string(n)
-    return replace(s, r"(?<=[0-9])(?=(?:[0-9]{3})+(?![0-9]))" => ",")
+# Formatter for integers and floats with commas
+function format_commas(val)
+    if val isa Integer
+        s = string(val)
+        return replace(s, r"(?<=[0-9])(?=(?:[0-9]{3})+(?![0-9]))" => ",")
+    else
+        parts = split(@sprintf("%.2f", val), '.')
+        int_part = replace(parts[1], r"(?<=[0-9])(?=(?:[0-9]{3})+(?![0-9]))" => ",")
+        return "$int_part.$(parts[2])"
+    end
 end
 
-function generate_professional_latex(file_path::String)
+function generate_triple_parallel_latex(file_path::String)
     if !isfile(file_path)
         error("File not found: $file_path")
     end
 
     df = CSV.read(file_path, DataFrame)
-
-    println("% Add \\usepackage{booktabs} and \\usepackage{siunitx} to your LaTeX preamble")
-    println("\\begin{table}[h]")
+    n_rows = nrow(df)
+    
+    # Calculate split points for 3 columns
+    chunk_size = Int(ceil(n_rows / 3))
+    
+    println("% Add \\usepackage{booktabs} to your LaTeX preamble")
+    println("\\begin{table}[ht]")
     println("  \\centering")
     println("  \\small")
-    # S column type from siunitx aligns decimals perfectly
-    println("  \\begin{tabular}{r S[table-format=4.2]}") 
-    println("    \\toprule")
-    println("    {k Value} & {Running Time (s)} \\\\")
-    println("    \\midrule")
 
-    for row in eachrow(df)
-        k_str = format_commas(row.k_value)
-        # Using { } around the comma-string so siunitx doesn't try to parse it as a number
-        time_val = @sprintf("%.2f", row.Running_Time_Sec)
+    for col in 0:2
+        start_idx = col * chunk_size + 1
+        end_idx = min((col + 1) * chunk_size, n_rows)
         
-        println("    {$(k_str)} & $(time_val) \\\\")
+        # Guard against empty chunks if data is very small
+        if start_idx > n_rows
+            break
+        end
+
+        # Start a separate tabular for each chunk
+        println("  \\begin{tabular}[t]{rr}") # [t] aligns them by the top
+        println("    \\toprule")
+        println("    \$k\$ Value & Time (s) \\\\")
+        println("    \\midrule")
+        
+        for i in start_idx:end_idx
+            k_str = format_commas(df[i, :k_value])
+            t_str = format_commas(df[i, :Running_Time_Sec])
+            println("    $(k_str) & $(t_str) \\\\")
+        end
+        
+        println("    \\bottomrule")
+        println("  \\end{tabular}")
+        
+        # Add spacing between tables, but not after the last one
+        if col < 2
+            println("  \\hfill") 
+        end
     end
 
-    println("    \\bottomrule")
-    println("  \\end{tabular}")
-    println("  \\caption{Performance metrics for increasing \$k\$ values.}")
+    println("  \\caption{Performance summary split into three independent parallel sections.}")
     println("\\end{table}")
 end
 
-generate_professional_latex("misc/results.csv")
+generate_triple_parallel_latex("misc/results.csv")
