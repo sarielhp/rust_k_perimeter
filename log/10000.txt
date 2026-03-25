@@ -1,0 +1,29 @@
+    Finished `release` profile [optimized + debuginfo] target(s) in 0.06s
+     Running `target/release/rust_k_perimeter 10000`
+Computing convex-hull of disk around origin with k points... Kind of...
+Computing good and bad sets with width = 5...
+Size: 28050
+Computing distance of good points to the origin...
+   ...done
+Building visibility graph...
+# Good points: 3408
+c: 524,288  n_g: 2007  dp_vals (u/t): 19 MB / 228 MB  d_all: 867,270
+c: 1,048,576  n_g: 4058  dp_vals (u/t): 33 MB / 228 MB  d_all: 780,690
+c: 1,572,864  n_g: 5780  dp_vals (u/t): 48 MB / 228 MB  d_all: 881,833
+c: 2,097,152  n_g: 7262  dp_vals (u/t): 59 MB / 228 MB  d_all: 914,287
+c: 2,621,440  n_g: 8328  dp_vals (u/t): 71 MB / 228 MB  d_all: 949,112
+c: 3,145,728  n_g: 8864  dp_vals (u/t): 81 MB / 228 MB  d_all: 867,297
+c: 3,670,016  n_g: 9476  dp_vals (u/t): 88 MB / 228 MB  d_all: 526,583
+# of configurations generated: 3960904
+k: 10000
+Polygon saved to output/pdfs/010000.pdf
+# Perimeter            : 353.4226254324751
+# circle perimeter     : 353.5336267234536
+# Naive perimeter      : 354.4907701811032
+# Area                 : 9918.5
+# vertices             : 56
+# boundary grid points : 161
+# Configs computed     : 3960904
+Max angle of sol : 0.19739555984988044
+Longest edge len : 13
+Running time in seconds: 16.631358105
