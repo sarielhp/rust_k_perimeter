@@ -164,7 +164,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // Explicitly tell the closure it returns a compatible Result
     let mut log_and_print = |label: &str, value: &dyn std::fmt::Display| -> Result<(), Box<dyn std::error::Error>> {
-        writeln!(log, "# {:22} : {}", label, value)?;
+        writeln!(log, "# {:23} : {}", label, value)?;
         println!("# {:22} : {}", label, value);
 
         Ok(())
