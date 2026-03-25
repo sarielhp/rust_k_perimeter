@@ -99,9 +99,11 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let max_edge_l = max_edge_length(k);
     let dirs = crate::geom::generate_primitive_vectors(max_edge_l);
+    let max_turn_angle = 2.0 * std::f64::consts::PI / (k as f64).powf(1.0 / 3.0);
+    println!("max_turn_angle: {}", max_turn_angle);
 
     println!("Building visibility graph...");
-    let vg = build_visibility_graph(&good, &bad_ch, &dirs, k);
+    let vg = build_visibility_graph(&good, &bad_ch, &dirs, k, max_turn_angle);
 
     let mut log = String::new();
 

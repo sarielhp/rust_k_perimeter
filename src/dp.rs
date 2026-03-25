@@ -49,6 +49,10 @@ pub struct DPStateValue {
     pub perimeter_so_far: f64,
     /// Index of the previous state in the `dp_vals` vector for solution reconstruction.
     pub prev_idx: u32,
+    /// Index in the adjacency list of the current point where valid outgoing edges start.
+    pub next_edge_start_idx: u32,
+    /// Index in the adjacency list of the current point where valid outgoing edges end (exclusive).
+    pub next_edge_end_idx: u32,
 }
 
 /// Reconstructs the polygon vertices by following the `prev_idx` pointers.
@@ -317,9 +321,14 @@ fn make_key(loc_id: u32, n_g: u32) -> u64 {
 fn process_configuration<S: QueueStrategy>(ctx: &mut DPContext<S::Key>, cfg_idx: usize) {
     *ctx.conf_count += 1;
 
-    let (cfg, perimeter_so_far) = {
+    let (cfg, perimeter_so_far, start_idx, end_idx) = {
         let val = &ctx.dp_vals[cfg_idx];
-        (val.cfg, val.perimeter_so_far)
+        (
+            val.cfg,
+            val.perimeter_so_far,
+            val.next_edge_start_idx as usize,
+            val.next_edge_end_idx as usize,
+        )
     };
 
     if *ctx.conf_count & (ctx.mask as i64) == 0 {
@@ -329,7 +338,7 @@ fn process_configuration<S: QueueStrategy>(ctx: &mut DPContext<S::Key>, cfg_idx:
     // Neighbors are pre-calculated in the visibility graph.
     let nbrs = &ctx.vg.adjacency_list[cfg.loc_id as usize];
 
-    for edge in nbrs.iter() {
+    for edge in nbrs[start_idx..end_idx].iter() {
         let next_n_g = cfg.n_g + edge.n_g_delta;
         // Optimization: early exit if too many grid points are enclosed.
         if next_n_g as usize > ctx.k {
@@ -370,6 +379,8 @@ fn process_configuration<S: QueueStrategy>(ctx: &mut DPContext<S::Key>, cfg_idx:
             cfg: next_cfg,
             perimeter_so_far: next_perim,
             prev_idx: cfg_idx as u32,
+            next_edge_start_idx: edge.next_edge_start_idx,
+            next_edge_end_idx: edge.next_edge_end_idx,
         };
 
         let push_idx;
@@ -465,6 +476,8 @@ pub fn minimize_perimeter_dp<S: QueueStrategy>(
         cfg: start_key,
         perimeter_so_far: 0.0,
         prev_idx: 0,
+        next_edge_start_idx: 0,
+        next_edge_end_idx: vg.adjacency_list[start_loc_id].len() as u32,
     };
     dp_vals.push(start_val)?;
 

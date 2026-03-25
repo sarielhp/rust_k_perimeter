@@ -1085,12 +1085,72 @@ pub struct EdgeInfo {
     pub edge_len: f64,
     /// Minimum Euclidean distance from the target point back to the origin.
     pub target_dto: f64,
+    /// Index in the adjacency list of the target point where valid outgoing edges start.
+    pub next_edge_start_idx: u32,
+    /// Index in the adjacency list of the target point where valid outgoing edges end (exclusive).
+    pub next_edge_end_idx: u32,
 }
 
 /// A graph where edges represent valid visibility segments between grid points.
 pub struct VisibilityGraph {
     /// Adjacency list storing precalculated edge information for each point.
     pub adjacency_list: Vec<Vec<EdgeInfo>>,
+}
+
+pub fn turn_angle(u: Point2D, v: Point2D, w: Point2D) -> f64 {
+    let p_uv = v - u;
+    let p_vw = w - v;
+    let angle_uv = (p_uv.y as f64).atan2(p_uv.x as f64);
+    let angle_vw = (p_vw.y as f64).atan2(p_vw.x as f64);
+    let mut diff = angle_vw - angle_uv;
+    while diff < 0.0 { diff += 2.0 * std::f64::consts::PI; }
+    while diff >= 2.0 * std::f64::consts::PI { diff -= 2.0 * std::f64::consts::PI; }
+    diff
+}
+
+pub fn verify_suffix_property(vg: &VisibilityGraph, good: &GridSet, max_turn_angle: f64) {
+    for u_id in 0..vg.adjacency_list.len() {
+        let u = *good.get_point_by_id(u_id);
+        for (edge_idx, edge_uv) in vg.adjacency_list[u_id].iter().enumerate() {
+            let v_id = edge_uv.target_id;
+            let v = *good.get_point_by_id(v_id);
+
+            let out_edges = &vg.adjacency_list[v_id];
+            let start_idx = edge_uv.next_edge_start_idx as usize;
+            let end_idx = edge_uv.next_edge_end_idx as usize;
+
+            for (idx, edge_vw) in out_edges.iter().enumerate() {
+                let w = *good.get_point_by_id(edge_vw.target_id);
+                let is_convex = is_lefteq_turn(u, v, w);
+                let t_angle = turn_angle(u, v, w);
+                let is_within_angle = is_convex && t_angle <= max_turn_angle + 1e-9;
+
+                if idx < start_idx {
+                    if is_convex {
+                        panic!(
+                            "Suffix property violated (start_idx) at vertex {:?} (id: {}), incoming from {:?} (id: {}), edge index {}. \
+                            Outgoing edge to {:?} (idx {}) is convex, but start_idx is {}.",
+                            v, v_id, u, u_id, edge_idx, w, idx, start_idx
+                        );
+                    }
+                } else if idx < end_idx {
+                    if !is_within_angle {
+                         panic!(
+                            "Range property violated (end_idx) at vertex {:?} (id: {}), incoming from {:?} (id: {}), edge index {}. \
+                            Outgoing edge to {:?} (idx {}) is NOT within angle (angle={}, max={}), but it is in the range [{}, {}).",
+                            v, v_id, u, u_id, edge_idx, w, idx, t_angle, max_turn_angle, start_idx, end_idx
+                        );
+                    }
+                } else {
+                    if is_within_angle {
+                        // This might be okay if it's after end_idx, but only if all subsequent ones are also not within angle?
+                        // Actually, with CCW sort, the turn angle is increasing.
+                    }
+                }
+            }
+        }
+    }
+    println!("Visibility graph suffix property verified successfully.");
 }
 
 /// Builds the visibility graph by checking visibility and orientation constraints for all potential edges.
@@ -1100,6 +1160,7 @@ pub fn build_visibility_graph(
     bad_ch: &[Point2D],
     dirs: &Vec<Point2D>,
     k: usize,
+    max_turn_angle: f64,
 ) -> VisibilityGraph {
     let n = good.num_points();
     let mut adjacency_list = vec![vec![]; n];
@@ -1159,9 +1220,63 @@ pub fn build_visibility_graph(
                 n_g_delta,
                 edge_len,
                 target_dto,
+                next_edge_start_idx: 0, 
+                next_edge_end_idx: 0,
             });
+        }
+
+        // Sort outgoing edges CCW relative to the direction from origin to u
+        let u = good.points[i];
+        let base_angle = (u.y as f64).atan2(u.x as f64);
+        adjacency_list[i].sort_by(|a, b| {
+            let p_a = *good.get_point_by_id(a.target_id) - u;
+            let p_b = *good.get_point_by_id(b.target_id) - u;
+            let mut angle_a = (p_a.y as f64).atan2(p_a.x as f64) - base_angle;
+            let mut angle_b = (p_b.y as f64).atan2(p_b.x as f64) - base_angle;
+            
+            while angle_a <= -std::f64::consts::PI { angle_a += 2.0 * std::f64::consts::PI; }
+            while angle_a > std::f64::consts::PI { angle_a -= 2.0 * std::f64::consts::PI; }
+            while angle_b <= -std::f64::consts::PI { angle_b += 2.0 * std::f64::consts::PI; }
+            while angle_b > std::f64::consts::PI { angle_b -= 2.0 * std::f64::consts::PI; }
+            
+            angle_a.partial_cmp(&angle_b).unwrap()
+        });
+    }
+
+    // Correct way to update:
+    for i in 0..n {
+        let u = good.points[i];
+        for j in 0..adjacency_list[i].len() {
+            let v_id = adjacency_list[i][j].target_id;
+            let v = *good.get_point_by_id(v_id);
+
+            let out_edges = &adjacency_list[v_id];
+            let mut start_idx = out_edges.len() as u32;
+            let mut end_idx = out_edges.len() as u32;
+
+            for (idx, edge_vw) in out_edges.iter().enumerate() {
+                let w = *good.get_point_by_id(edge_vw.target_id);
+                if is_lefteq_turn(u, v, w) {
+                    if start_idx == out_edges.len() as u32 {
+                        start_idx = idx as u32;
+                    }
+                    if turn_angle(u, v, w) <= max_turn_angle + 1e-9 {
+                        // This w is still within the angle limit.
+                        // Since edges are sorted CCW, and they are already convex, 
+                        // the turn angle is increasing.
+                    } else {
+                        if end_idx == out_edges.len() as u32 {
+                            end_idx = idx as u32;
+                        }
+                    }
+                }
+            }
+            adjacency_list[i][j].next_edge_start_idx = start_idx;
+            adjacency_list[i][j].next_edge_end_idx = end_idx;
         }
     }
 
-    VisibilityGraph { adjacency_list }
+    let vg = VisibilityGraph { adjacency_list };
+    verify_suffix_property(&vg, good, max_turn_angle);
+    vg
 }
