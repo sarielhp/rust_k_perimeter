@@ -34,6 +34,7 @@ function  run_on() {
 
     if  [[ -e $FL ]]; then
         echo return
+        return
     fi
 
     echo -e "\n\n\n\n\n\n"
@@ -67,8 +68,13 @@ run_on    350_000
 run_on    400_000
 run_on    450_000
 run_on    500_000
+run_on    550_000
 run_on    600_000
+run_on    650_000
 run_on    700_000
+run_on    750_000
 run_on    800_000
+run_on    850_000
 run_on    900_000
+run_on    950_000
 run_on  1_000_000
