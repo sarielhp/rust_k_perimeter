@@ -1,5 +1,7 @@
+use crate::kd_tree::{BBox, KDTree, Status};
 use crate::point::*;
 use std::collections::VecDeque;
+use std::time::Instant;
 //use cached::proc_macro::cached;
 
 use std::{
@@ -1178,6 +1180,48 @@ pub fn verify_suffix_property(vg: &VisibilityGraph, good: &GridSet, max_turn_ang
     println!("Visibility graph suffix property verified successfully.");
 }
 
+fn halfplane_bbox_status(bbox: &BBox, a: Point2D, b: Point2D, inclusive: bool) -> Status {
+    let dx = b.x as i64 - a.x as i64;
+    let dy = b.y as i64 - a.y as i64;
+
+    let mut min_f = i64::MAX;
+    let mut max_f = i64::MIN;
+
+    let corners = [
+        (bbox.min_x, bbox.min_y),
+        (bbox.min_x, bbox.max_y),
+        (bbox.max_x, bbox.min_y),
+        (bbox.max_x, bbox.max_y),
+    ];
+
+    for (x, y) in corners {
+        let f = dx * (y as i64 - a.y as i64) - dy * (x as i64 - a.x as i64);
+        if f < min_f {
+            min_f = f;
+        }
+        if f > max_f {
+            max_f = f;
+        }
+    }
+
+    if inclusive {
+        if min_f >= 0 {
+            return Status::Inside;
+        }
+        if max_f < 0 {
+            return Status::Outside;
+        }
+    } else {
+        if min_f > 0 {
+            return Status::Inside;
+        }
+        if max_f <= 0 {
+            return Status::Outside;
+        }
+    }
+    Status::Partial
+}
+
 /// Builds the visibility graph by checking visibility and orientation constraints for all potential edges.
 /// Also precalculates grid point counts (n_g) and distances for each valid edge.
 pub fn build_visibility_graph(
@@ -1188,11 +1232,20 @@ pub fn build_visibility_graph(
     k: usize,
     max_turn_angle: f64,
 ) -> VisibilityGraph {
+    let start_vg = Instant::now();
     let n = good.num_points();
     let mut adjacency_list = vec![vec![]; n];
     let n_dirs = dirs.len();
     let sqrt_k = (k as f64).sqrt().ceil() as i32 + 1;
 
+    let start_kdtree = Instant::now();
+    let tree = KDTree::new(so_so.to_vec());
+    println!(
+        "   KDTree construction took: {:?}",
+        start_kdtree.elapsed()
+    );
+
+    let start_edges = Instant::now();
     let origin = Point2D { x: 0, y: 0 };
     for i in 0..n {
         let p = good.points[i];
@@ -1241,24 +1294,35 @@ pub fn build_visibility_graph(
             let edge_len = (p - q).norm();
             let target_dto = good.get_dto(q).0;
 
-            let mut max_addion_g = 0;
-            for pt in so_so {
-                if is_left_turn(ORIGIN, q, *pt) && !is_right_turn(p, q, *pt) {
-                    max_addion_g += 1;
-                }
-            }
+            let max_addion_g = tree.count_in_region(
+                |pt| is_left_turn(ORIGIN, q, pt) && !is_right_turn(p, q, pt),
+                &|bbox| {
+                    let s1 = halfplane_bbox_status(bbox, ORIGIN, q, false);
+                    let s2 = halfplane_bbox_status(bbox, p, q, true);
+                    match (s1, s2) {
+                        (Status::Outside, _) | (_, Status::Outside) => Status::Outside,
+                        (Status::Inside, Status::Inside) => Status::Inside,
+                        _ => Status::Partial,
+                    }
+                },
+            );
+
 
             adjacency_list[i].push(EdgeInfo {
                 target_id: q_id,
                 n_g_delta,
-                max_addion_g,
+                max_addion_g: max_addion_g as u32,
                 edge_len,
                 target_dto,
                 next_edge_start_idx: 0,
                 next_edge_end_idx: 0,
             });
         }
+    }
+    println!("   Edges generation took: {:?}", start_edges.elapsed());
 
+    let start_sort = Instant::now();
+    for i in 0..n {
         // Sort outgoing edges CCW relative to the direction from origin to u
         let u = good.points[i];
         let base_angle = (u.y as f64).atan2(u.x as f64);
@@ -1284,8 +1348,10 @@ pub fn build_visibility_graph(
             angle_a.partial_cmp(&angle_b).unwrap()
         });
     }
+    println!("   Sorting edges took: {:?}", start_sort.elapsed());
 
     // Correct way to update:
+    let start_next_edge = Instant::now();
     for i in 0..n {
         let u = good.points[i];
         for j in 0..adjacency_list[i].len() {
@@ -1317,9 +1383,19 @@ pub fn build_visibility_graph(
             adjacency_list[i][j].next_edge_end_idx = end_idx;
         }
     }
+    println!(
+        "   Next edge indices took: {:?}",
+        start_next_edge.elapsed()
+    );
 
     let vg = VisibilityGraph { adjacency_list };
+    let start_verify = Instant::now();
     verify_suffix_property(&vg, good, max_turn_angle);
+    println!(
+        "   Verification took: {:?}",
+        start_verify.elapsed()
+    );
+    println!("   Total build_visibility_graph took: {:?}", start_vg.elapsed());
     vg
 }
 

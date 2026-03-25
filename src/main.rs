@@ -1,6 +1,7 @@
 mod dp;
 mod draw;
 mod geom;
+mod kd_tree;
 mod point;
 mod polygon;
 
@@ -154,7 +155,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     writeln!(log, "# Good points: {}", good.length())?;
     println!("# Good points: {}", good.length());
 
-    let Ok((sol, ub_circle, conf_count)) = (if queue_strategy == "perim_ng" {
+    println!("Starting DP solver...");
+    let start_dp = Instant::now();
+    let dp_res = if queue_strategy == "perim_ng" {
         minimize_perimeter_dp::<PerimThenNgStrategy>(k, &good, &vg)
     } else if queue_strategy == "topo_ng" {
         minimize_perimeter_dp::<TopoThenNgStrategy>(k, &good, &vg)
@@ -170,7 +173,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         minimize_perimeter_dp::<NgThenPerimStrategy>(k, &good, &vg)
     } else {
         minimize_perimeter_dp::<NgPerimDtoStrategy>(k, &good, &vg)
-    }) else {
+    };
+    let dp_duration = start_dp.elapsed();
+
+    let Ok((sol, ub_circle, conf_count)) = dp_res else {
         eprintln!("Error: The DP solver failed to initialize or write to disk.");
         std::process::exit(1);
     };
@@ -216,6 +222,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             Ok(())
         };
 
+    log_and_print("DP duration", &dp_duration.as_secs_f64())?;
     log_and_print("Perimeter", &perimeter)?;
     log_and_print("circle perimeter", &ch_m_perimeter)?;
     log_and_print("Naive perimeter", &ub_circle)?;
