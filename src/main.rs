@@ -98,7 +98,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let l = if l_f > 3 { l_f } else { 3 };
 
     println!("Computing good and bad sets with width = {}...", l);
-    let (mut good, bad_ch) = compute_good_set(&ch_m_exp, l as f64);
+    let (mut good, bad_ch, so_so) = compute_good_set(&ch_m_exp, l as f64);
 
     println!("Computing distance of good points to the origin...");
     good.fill_dist_to_origin(&bad_ch);
@@ -110,7 +110,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("max_turn_angle: {}", max_turn_angle);
 
     println!("Building visibility graph...");
-    let mut vg = build_visibility_graph(&good, &bad_ch, &dirs, k, max_turn_angle);
+    let mut vg = build_visibility_graph(&good, &bad_ch, &so_so, &dirs, k, max_turn_angle);
 
     if topo_mode || queue_strategy == "topo_ng" {
         println!("Performing topological sort...");
@@ -208,12 +208,13 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let ch_m_perimeter = compute_perimeter(&ch_m);
 
     // Explicitly tell the closure it returns a compatible Result
-    let mut log_and_print = |label: &str, value: &dyn std::fmt::Display| -> Result<(), Box<dyn std::error::Error>> {
-        writeln!(log, "# {:23} : {}", label, value)?;
-        println!("# {:23} : {}", label, value);
+    let mut log_and_print =
+        |label: &str, value: &dyn std::fmt::Display| -> Result<(), Box<dyn std::error::Error>> {
+            writeln!(log, "# {:23} : {}", label, value)?;
+            println!("# {:23} : {}", label, value);
 
-        Ok(())
-    };
+            Ok(())
+        };
 
     log_and_print("Perimeter", &perimeter)?;
     log_and_print("circle perimeter", &ch_m_perimeter)?;

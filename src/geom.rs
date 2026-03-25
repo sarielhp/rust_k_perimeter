@@ -961,14 +961,15 @@ pub fn polygon_area(poly: &[Point2D]) -> f64 {
     (area / 2.0).abs()
 }
 
-pub fn compute_good_set(ch_m: &[Point2D], l: f64) -> (GridSet, Vec<Point2D>) {
-    let expand = (3.0 * l + 3.0).ceil() as i32;
+pub fn compute_good_set(ch_m: &[Point2D], d_bad: f64) -> (GridSet, Vec<Point2D>, Vec<Point2D>) {
+    let expand = (3.0 * d_bad + 3.0).ceil() as i32;
     let (min_x, max_x, _, max_y) = bound(&[ch_m], expand);
     let min_y = 0;
 
     //let mut bad = GridSet::new(min_x, max_x, min_y, max_y);
     let mut good = GridSet::new(min_x, max_x, min_y, max_y);
     let mut bad_in: Vec<Point2D> = Vec::new();
+    let mut so_so: Vec<Point2D> = Vec::new();
     for y in min_y..=max_y {
         if y < 0 {
             continue;
@@ -978,17 +979,19 @@ pub fn compute_good_set(ch_m: &[Point2D], l: f64) -> (GridSet, Vec<Point2D>) {
             let f_in = is_point_in_polygon(ch_m, p);
             let d = polygon_boundary_distance(ch_m, p);
 
-            if d > l {
+            if d > d_bad {
                 // bad.insert(p);
                 if f_in {
                     bad_in.push(p);
+                    so_so.push(p);
                 }
 
                 continue;
             }
 
-            if f_in || d <= l {
+            if f_in || d <= d_bad {
                 good.insert(p);
+                so_so.push(p);
             }
         }
     }
@@ -1017,7 +1020,7 @@ pub fn compute_good_set(ch_m: &[Point2D], l: f64) -> (GridSet, Vec<Point2D>) {
     let bad_ch = convex_hull(&bad_in);
     good.compute_points();
 
-    (good, bad_ch)
+    (good, bad_ch, so_so)
 }
 
 pub fn len_longest_edge(poly: &[Point2D]) -> f64 {
@@ -1097,6 +1100,8 @@ pub struct EdgeInfo {
     pub target_id: usize,
     /// Number of new grid points enclosed when adding this edge to the polygon.
     pub n_g_delta: u32,
+    /// Max additional grid points for pruning.
+    pub max_addion_g: u32,
     /// Euclidean length of the edge.
     pub edge_len: f64,
     /// Minimum Euclidean distance from the target point back to the origin.
@@ -1119,8 +1124,12 @@ pub fn turn_angle(u: Point2D, v: Point2D, w: Point2D) -> f64 {
     let angle_uv = (p_uv.y as f64).atan2(p_uv.x as f64);
     let angle_vw = (p_vw.y as f64).atan2(p_vw.x as f64);
     let mut diff = angle_vw - angle_uv;
-    while diff < 0.0 { diff += 2.0 * std::f64::consts::PI; }
-    while diff >= 2.0 * std::f64::consts::PI { diff -= 2.0 * std::f64::consts::PI; }
+    while diff < 0.0 {
+        diff += 2.0 * std::f64::consts::PI;
+    }
+    while diff >= 2.0 * std::f64::consts::PI {
+        diff -= 2.0 * std::f64::consts::PI;
+    }
     diff
 }
 
@@ -1151,7 +1160,7 @@ pub fn verify_suffix_property(vg: &VisibilityGraph, good: &GridSet, max_turn_ang
                     }
                 } else if idx < end_idx {
                     if !is_within_angle {
-                         panic!(
+                        panic!(
                             "Range property violated (end_idx) at vertex {:?} (id: {}), incoming from {:?} (id: {}), edge index {}. \
                             Outgoing edge to {:?} (idx {}) is NOT within angle (angle={}, max={}), but it is in the range [{}, {}).",
                             v, v_id, u, u_id, edge_idx, w, idx, t_angle, max_turn_angle, start_idx, end_idx
@@ -1174,6 +1183,7 @@ pub fn verify_suffix_property(vg: &VisibilityGraph, good: &GridSet, max_turn_ang
 pub fn build_visibility_graph(
     good: &GridSet,
     bad_ch: &[Point2D],
+    so_so: &[Point2D],
     dirs: &Vec<Point2D>,
     k: usize,
     max_turn_angle: f64,
@@ -1231,12 +1241,20 @@ pub fn build_visibility_graph(
             let edge_len = (p - q).norm();
             let target_dto = good.get_dto(q).0;
 
+            let mut max_addion_g = 0;
+            for pt in so_so {
+                if is_left_turn(ORIGIN, q, *pt) && !is_right_turn(p, q, *pt) {
+                    max_addion_g += 1;
+                }
+            }
+
             adjacency_list[i].push(EdgeInfo {
                 target_id: q_id,
                 n_g_delta,
+                max_addion_g,
                 edge_len,
                 target_dto,
-                next_edge_start_idx: 0, 
+                next_edge_start_idx: 0,
                 next_edge_end_idx: 0,
             });
         }
@@ -1249,12 +1267,20 @@ pub fn build_visibility_graph(
             let p_b = *good.get_point_by_id(b.target_id) - u;
             let mut angle_a = (p_a.y as f64).atan2(p_a.x as f64) - base_angle;
             let mut angle_b = (p_b.y as f64).atan2(p_b.x as f64) - base_angle;
-            
-            while angle_a <= -std::f64::consts::PI { angle_a += 2.0 * std::f64::consts::PI; }
-            while angle_a > std::f64::consts::PI { angle_a -= 2.0 * std::f64::consts::PI; }
-            while angle_b <= -std::f64::consts::PI { angle_b += 2.0 * std::f64::consts::PI; }
-            while angle_b > std::f64::consts::PI { angle_b -= 2.0 * std::f64::consts::PI; }
-            
+
+            while angle_a <= -std::f64::consts::PI {
+                angle_a += 2.0 * std::f64::consts::PI;
+            }
+            while angle_a > std::f64::consts::PI {
+                angle_a -= 2.0 * std::f64::consts::PI;
+            }
+            while angle_b <= -std::f64::consts::PI {
+                angle_b += 2.0 * std::f64::consts::PI;
+            }
+            while angle_b > std::f64::consts::PI {
+                angle_b -= 2.0 * std::f64::consts::PI;
+            }
+
             angle_a.partial_cmp(&angle_b).unwrap()
         });
     }
@@ -1278,7 +1304,7 @@ pub fn build_visibility_graph(
                     }
                     if turn_angle(u, v, w) <= max_turn_angle + 1e-9 {
                         // This w is still within the angle limit.
-                        // Since edges are sorted CCW, and they are already convex, 
+                        // Since edges are sorted CCW, and they are already convex,
                         // the turn angle is increasing.
                     } else {
                         if end_idx == out_edges.len() as u32 {

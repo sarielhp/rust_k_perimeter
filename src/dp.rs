@@ -365,7 +365,6 @@ pub struct QueueItem<K: Ord> {
     pub loc_id: u32,
 }
 
-
 /// Context passed around during the DP execution.
 pub struct DPContext<'a, K: Ord> {
     /// Total number of configurations explored.
@@ -438,6 +437,10 @@ fn process_configuration<S: QueueStrategy>(ctx: &mut DPContext<S::Key>, cfg_idx:
         let next_n_g = cfg.n_g + edge.n_g_delta;
         // Optimization: early exit if too many grid points are enclosed.
         if next_n_g as usize > ctx.k {
+            continue;
+        }
+        if (next_n_g + edge.max_addion_g) < (ctx.k as u32) {
+            //println!("Flogi");
             continue;
         }
 
