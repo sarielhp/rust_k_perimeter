@@ -38,12 +38,12 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         println!("  --queue=strategy  Select the priority queue ordering strategy.");
         println!();
         println!("Available queue strategies:");
-        println!("  ng_perim_dto  (default) Sort by n_g (ascending), then (perimeter + DTO).");
+        println!("  ng_idx        (default) Sort by n_g (ascending), then queue insertion index.");
+        println!("  ng_perim_dto            Sort by n_g (ascending), then (perimeter + DTO).");
         println!("  ng_perim                Sort by n_g (ascending), then perimeter (ascending).");
         println!("  perim_ng                Sort by perimeter (ascending), then n_g (ascending).");
         println!("  perim_ng_dtog           Sort by perimeter (ascending), then (n_g + DTO_G).");
         println!("  ng_dto                  Sort by n_g (ascending), then DTO (ascending).");
-        println!("  ng_idx                  Sort by n_g (ascending), then queue insertion index.");
         println!(
             "  perim_idx               Sort by perimeter (ascending), then queue insertion index."
         );
@@ -59,7 +59,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     std::fs::create_dir_all(dir_polys).unwrap_or_default();
     std::fs::create_dir_all(dir_summary).unwrap_or_default();
 
-    let mut queue_strategy = "ng_perim_dto".to_string();
+    let mut queue_strategy = "ng_idx".to_string();
     for arg in args.iter().skip(1) {
         if arg.starts_with("--queue=") {
             queue_strategy = arg.split('=').nth(1).unwrap_or("ng_perim_dto").to_string();
@@ -161,21 +161,25 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     draw_polygon_with_grid(dir_pdfs, &sol, &ch_m, &ch_m_exp, k, ub_circle, &good);
     let ch_m_perimeter = compute_perimeter(&ch_m);
-    writeln!(log, "# Perimeter            : {}", perimeter)?;
-    writeln!(log, "# circle perimeter     : {}", ch_m_perimeter)?;
-    writeln!(log, "# Naive perimeter      : {}", ub_circle)?;
-    writeln!(log, "# Area                 : {}", area)?;
-    writeln!(log, "# vertices             : {}", v_n)?;
-    writeln!(log, "# boundary grid points : {}", b_n)?;
-    writeln!(log, "# Configs computed     : {}", conf_count)?;
 
-    println!("# Perimeter            : {}", perimeter);
-    println!("# circle perimeter     : {}", ch_m_perimeter);
-    println!("# Naive perimeter      : {}", ub_circle);
-    println!("# Area                 : {}", area);
-    println!("# vertices             : {}", v_n);
-    println!("# boundary grid points : {}", b_n);
-    println!("# Configs computed     : {}", conf_count);
+    // Explicitly tell the closure it returns a compatible Result
+    let mut log_and_print = |label: &str, value: &dyn std::fmt::Display| -> Result<(), Box<dyn std::error::Error>> {
+        writeln!(log, "# {:22} : {}", label, value)?;
+        println!("# {:22} : {}", label, value);
+
+        Ok(())
+    };
+
+    log_and_print("Perimeter", &perimeter)?;
+    log_and_print("circle perimeter", &ch_m_perimeter)?;
+    log_and_print("Naive perimeter", &ub_circle)?;
+    log_and_print("Area", &area)?;
+    let v_n_f64 = v_n as f64;
+    log_and_print("vertices", &v_n_f64)?;
+    let b_n_f64 = b_n as f64;
+    log_and_print("boundary grid points", &b_n_f64)?;
+    let conf_count_f64 = conf_count as f64;
+    log_and_print("Configs computed", &conf_count_f64)?;
 
     let c_max_angle = compute_max_turn_angle(&sol);
 
@@ -187,15 +191,15 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         perimeter <= ub_circle * 1.00001,
         "perimeter not computed correctly B"
     );
-    writeln!(log, "# Max angle of sol : {}", c_max_angle)?;
-    writeln!(log, "# Longest edge len : {}", len_longest_edge(&sol))?;
+    log_and_print("Max angle of sol", &c_max_angle)?;
+    log_and_print("UB max turn_angle", &max_turn_angle)?;
 
-    println!("Max angle of sol : {}", c_max_angle);
-    println!("Longest edge len : {}", len_longest_edge(&sol));
+    let len_longest = len_longest_edge(&sol);
+    log_and_print("Longest edge len", &len_longest)?;
     let duration = start.elapsed();
 
-    writeln!(log, "# Running time in seconds: {}", duration.as_secs_f64())?;
-    println!("Running time in seconds: {}", duration.as_secs_f64());
+    let secs = duration.as_secs_f64();
+    log_and_print("Running time in seconds", &secs)?;
 
     let filename_poly: String = format!("{}/{:06}_poly.txt", dir_polys, k);
     save_polygon(&filename_poly, &sol, Some(&log))?;
