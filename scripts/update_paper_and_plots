@@ -16,6 +16,11 @@ echo "-----------------------------------------------"
 echo "Extracting running times into misc/results.csv"
 scripts/extract_running_time.jl
 
+
+echo "-----------------------------------------------"
+echo "Extracting all info into misc/extracted_date.csv"
+scripts/extract_stats.jl
+
 echo -e "\n\n"
 echo "-----------------------------------------------"
 echo "Generating plots... (patience)"
@@ -29,7 +34,7 @@ scripts/plots.jl
 
 echo "-----------------------------------------------"
 echo "Generating table"
-scripts/generate_table_3.jl >& misc/rt_table.tex
+scripts/generate_table.jl >& misc/rt_table.tex
 
 echo -e "\n\n"
 echo "-----------------------------------------------"
