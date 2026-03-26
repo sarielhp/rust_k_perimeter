@@ -35,4 +35,6 @@ archive/
 
 output/pdfs/*
 output/
+plots/
+
 # DEL_THIS_LINE 22378

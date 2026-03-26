@@ -4,6 +4,7 @@ mod geom;
 mod kd_tree;
 mod point;
 mod polygon;
+mod v_graph;
 
 use dp::{
     max_edge_length, minimize_perimeter_dp, NgDtoStrategy, NgPerimDtoStrategy, NgThenIdxStrategy,
@@ -11,9 +12,8 @@ use dp::{
     TopoThenNgStrategy,
 };
 use draw::{compute_perimeter, draw_polygon_with_grid};
-use geom::{
-    build_visibility_graph, ch_disk_origin, compute_good_set, compute_max_turn_angle, vtrans,
-};
+use geom::{ch_disk_origin, compute_good_set, compute_max_turn_angle, vtrans};
+use v_graph::build_visibility_graph;
 use point::*;
 use polygon::*;
 
@@ -32,7 +32,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let start = Instant::now();
     let args: Vec<String> = env::args().collect();
     if args.len() < 2 {
-        println!("Usage: k_perimeter [k] [--queue=strategy] [--topo]");
+        println!("Usage: k_perimeter [k] [--queue=strategy] [--topo] [--vg-only]");
         println!();
         println!("Arguments:");
         println!("  [k]               The number of grid points the polygon should enclose.");
@@ -41,6 +41,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         );
         println!("  --queue=strategy  Select the priority queue ordering strategy.");
         println!("  --topo            Build visibility graph, perform topological sort, output vertices to output/topo.txt and exit.");
+        println!("  --vg-only         Stop after visibility graph construction.");
         println!();
         println!("Available queue strategies:");
         println!("  topo_ng       (default) Sort by topological index (ascending), then n_g (ascending).");
@@ -67,12 +68,16 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let mut queue_strategy = "topo_ng".to_string();
     let mut topo_mode = false;
+    let mut vg_only = false;
     for arg in args.iter().skip(1) {
         if arg.starts_with("--queue=") {
             queue_strategy = arg.split('=').nth(1).unwrap_or("topo_ng").to_string();
         }
         if arg == "--topo" {
             topo_mode = true;
+        }
+        if arg == "--vg-only" {
+            vg_only = true;
         }
     }
 
@@ -108,12 +113,17 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("   ...done");
 
     let max_edge_l = max_edge_length(k);
-    let dirs = crate::geom::generate_primitive_vectors(max_edge_l);
+    let dirs = geom::generate_primitive_vectors(max_edge_l);
     let max_turn_angle = 3.0 * std::f64::consts::PI / (k as f64).powf(1.0 / 3.0);
     println!("max_turn_angle: {}", max_turn_angle);
 
     println!("Building visibility graph...");
     let mut vg = build_visibility_graph(&good, &bad_ch, &so_so, &dirs, k, max_turn_angle);
+
+    if vg_only {
+        println!("Stopping after visibility graph construction as requested.");
+        return Ok(());
+    }
 
     if topo_mode || queue_strategy == "topo_ng" {
         println!("Performing topological sort...");
@@ -125,7 +135,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             }
         }
 
-        if let Some(topo_order) = crate::geom::topological_sort(&vg) {
+        if let Some(topo_order) = v_graph::topological_sort(&vg) {
             for (idx, &id) in topo_order.iter().enumerate() {
                 good.set_topo_idx(id, idx as u32);
             }

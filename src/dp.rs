@@ -6,7 +6,8 @@ use std::cmp::max;
 
 use mmap_vec::MmapVec;
 
-use crate::geom::{GridSet, VisibilityGraph};
+use crate::geom::GridSet;
+use crate::v_graph::VisibilityGraph;
 use num_format::{Locale, ToFormattedString};
 use rustc_hash::FxHashMap;
 use std::cmp::Ordering;
