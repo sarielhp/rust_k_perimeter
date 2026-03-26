@@ -19,6 +19,7 @@ bytemuck = { version = "1.14", features = ["derive"] }
 mmap-vec = "0.2.0"
 anyhow = "1.0.102"
 cached = "0.58.0"
+num = "0.4.3"
 
 [[bin]]
 name = "rust_k_perimeter"

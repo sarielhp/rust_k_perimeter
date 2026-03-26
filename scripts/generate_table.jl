@@ -28,7 +28,7 @@ function generate_triple_parallel_latex(file_path::String)
     chunk_size = Int(ceil(n_rows / 3))
     
     println("% Add \\usepackage{booktabs} to your LaTeX preamble")
-    println("\\begin{table}[ht]")
+    #println("\\begin{table}[ht]")
     println("  \\centering")
     println("  \\small")
 
@@ -63,7 +63,7 @@ function generate_triple_parallel_latex(file_path::String)
     end
 
     println("  \\caption{Performance summary split into three independent parallel sections.}")
-    println("\\end{table}")
+    #println("\\end{table}")
 end
 
 generate_triple_parallel_latex("misc/results.csv")

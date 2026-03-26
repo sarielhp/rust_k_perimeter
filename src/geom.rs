@@ -1,5 +1,6 @@
 use crate::kd_tree::{BBox, KDTree, Status};
 use crate::point::*;
+use num::integer::gcd;
 use std::collections::VecDeque;
 use std::time::Instant;
 //use cached::proc_macro::cached;
@@ -147,15 +148,6 @@ pub fn double_triangle_area(a: Point2D, b: Point2D, c: Point2D) -> i64 {
 
 pub fn triangle_area(a: Point2D, b: Point2D, c: Point2D) -> f64 {
     double_triangle_area(a, b, c) as f64 / 2.0
-}
-
-pub fn gcd(mut a: i64, mut b: i64) -> i64 {
-    while b != 0 {
-        let t = b;
-        b = a % b;
-        a = t;
-    }
-    a.abs()
 }
 
 //#[cached]
@@ -1025,6 +1017,7 @@ pub fn compute_good_set(ch_m: &[Point2D], d_bad: f64) -> (GridSet, Vec<Point2D>,
     (good, bad_ch, so_so)
 }
 
+#[allow(dead_code)]
 pub fn len_longest_edge(poly: &[Point2D]) -> f64 {
     let n = poly.len();
     if n < 2 {
@@ -1039,6 +1032,37 @@ pub fn len_longest_edge(poly: &[Point2D]) -> f64 {
 
         let dx = p2.x - p1.x;
         let dy = p2.y - p1.y;
+
+        // Calculate squared distance: dx^2 + dy^2
+        let dist_sq = dx as i64 * dx as i64 + dy as i64 * dy as i64;
+
+        if dist_sq > max_dist_sq {
+            max_dist_sq = dist_sq;
+        }
+    }
+
+    // Convert to f64 and take the square root once
+    (max_dist_sq as f64).sqrt()
+}
+
+pub fn len_longest_primitive_edge(poly: &[Point2D]) -> f64 {
+    let n = poly.len();
+    if n < 2 {
+        return 0.0;
+    }
+
+    let mut max_dist_sq: i64 = 0;
+
+    for i in 0..n {
+        let p1 = poly[i];
+        let p2 = poly[(i + 1) % n]; // Wraps around to the first point
+
+        let mut dx: i64 = p2.x as i64 - p1.x as i64;
+        let mut dy: i64 = p2.y as i64 - p1.y as i64;
+        let g_c_d = gcd(dx.abs() as u64, dy.abs() as u64);
+
+        dx = dx / (g_c_d as i64);
+        dy = dy / (g_c_d as i64);
 
         // Calculate squared distance: dx^2 + dy^2
         let dist_sq = dx as i64 * dx as i64 + dy as i64 * dy as i64;
@@ -1240,10 +1264,7 @@ pub fn build_visibility_graph(
 
     let start_kdtree = Instant::now();
     let tree = KDTree::new(so_so.to_vec());
-    println!(
-        "   KDTree construction took: {:?}",
-        start_kdtree.elapsed()
-    );
+    println!("   KDTree construction took: {:?}", start_kdtree.elapsed());
 
     let start_edges = Instant::now();
     let origin = Point2D { x: 0, y: 0 };
@@ -1307,7 +1328,6 @@ pub fn build_visibility_graph(
                 },
             );
 
-
             adjacency_list[i].push(EdgeInfo {
                 target_id: q_id,
                 n_g_delta,
@@ -1348,7 +1368,7 @@ pub fn build_visibility_graph(
             angle_a.partial_cmp(&angle_b).unwrap()
         });
     }
-    println!("   Sorting edges took: {:?}", start_sort.elapsed());
+    println!("   `Sorting` edges took: {:?}", start_sort.elapsed());
 
     // Correct way to update:
     let start_next_edge = Instant::now();
@@ -1383,19 +1403,16 @@ pub fn build_visibility_graph(
             adjacency_list[i][j].next_edge_end_idx = end_idx;
         }
     }
-    println!(
-        "   Next edge indices took: {:?}",
-        start_next_edge.elapsed()
-    );
+    println!("   Next edge indices took: {:?}", start_next_edge.elapsed());
 
     let vg = VisibilityGraph { adjacency_list };
     let start_verify = Instant::now();
     verify_suffix_property(&vg, good, max_turn_angle);
+    println!("   Verification took: {:?}", start_verify.elapsed());
     println!(
-        "   Verification took: {:?}",
-        start_verify.elapsed()
+        "   Total build_visibility_graph took: {:?}",
+        start_vg.elapsed()
     );
-    println!("   Total build_visibility_graph took: {:?}", start_vg.elapsed());
     vg
 }
 

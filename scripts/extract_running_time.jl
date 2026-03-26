@@ -9,7 +9,7 @@ output_csv = "misc/results.csv"
 # Regex patterns
 # Captures numbers (integers or floats) after the specific triggers
 k_regex = r"k:\s*(\d+\.?\d*)"
-time_regex = r"# Running time in seconds:\s*(\d+\.?\d*)"
+time_regex = r"# Running time in seconds\s*:\s*(\d+\.?\d*)"
 
 function process_files()
     if !isfile(input_list)

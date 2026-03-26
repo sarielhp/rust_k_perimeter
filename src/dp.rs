@@ -521,7 +521,7 @@ fn process_configuration<S: QueueStrategy>(ctx: &mut DPContext<S::Key>, cfg_idx:
 }
 
 pub fn max_edge_length(k: usize) -> u32 {
-    (k as f64).powf(1.0 / 3.0).round() as u32 + 1
+    ((k as f64).powf(1.0 / 3.0) / 2.0).round() as u32 + 2
 }
 
 pub fn minimize_perimeter_dp<S: QueueStrategy>(

@@ -12,8 +12,7 @@ use dp::{
 };
 use draw::{compute_perimeter, draw_polygon_with_grid};
 use geom::{
-    build_visibility_graph, ch_disk_origin, compute_good_set, compute_max_turn_angle,
-    len_longest_edge, vtrans,
+    build_visibility_graph, ch_disk_origin, compute_good_set, compute_max_turn_angle, vtrans,
 };
 use point::*;
 use polygon::*;
@@ -24,7 +23,10 @@ use std::fs::File;
 use std::io::Write;
 use std::time::Instant;
 
-use crate::geom::{boundary_grid_points, polygon_area, polygon_rm_redundant_vertices};
+use crate::geom::{
+    boundary_grid_points, len_longest_edge, len_longest_primitive_edge, polygon_area,
+    polygon_rm_redundant_vertices,
+};
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let start = Instant::now();
@@ -107,7 +109,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let max_edge_l = max_edge_length(k);
     let dirs = crate::geom::generate_primitive_vectors(max_edge_l);
-    let max_turn_angle = 2.0 * std::f64::consts::PI / (k as f64).powf(1.0 / 3.0);
+    let max_turn_angle = 3.0 * std::f64::consts::PI / (k as f64).powf(1.0 / 3.0);
     println!("max_turn_angle: {}", max_turn_angle);
 
     println!("Building visibility graph...");
@@ -216,8 +218,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Explicitly tell the closure it returns a compatible Result
     let mut log_and_print =
         |label: &str, value: &dyn std::fmt::Display| -> Result<(), Box<dyn std::error::Error>> {
-            writeln!(log, "# {:23} : {}", label, value)?;
-            println!("# {:23} : {}", label, value);
+            writeln!(log, "# {:26} : {}", label, value)?;
+            println!("# {:26} : {}", label, value);
 
             Ok(())
         };
@@ -247,8 +249,11 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     log_and_print("Max angle of sol", &c_max_angle)?;
     log_and_print("UB max turn_angle", &max_turn_angle)?;
 
+    let len_p_longest = len_longest_primitive_edge(&sol);
     let len_longest = len_longest_edge(&sol);
     log_and_print("Longest edge len", &len_longest)?;
+    log_and_print("Longest primitive edge len", &len_p_longest)?;
+    log_and_print("UB primitive edge len", &max_edge_l)?;
     let duration = start.elapsed();
 
     let secs = duration.as_secs_f64();

@@ -16,7 +16,7 @@ push!(PGFPlotsX.CUSTOM_PREAMBLE, "\\usepackage{amsmath}")
 function analyze_and_plot(file_path::String)
     # 1. Load and clean data
     df = CSV.read(file_path, DataFrame ); #, header=[:n, :time])
-#    println( names(df ));
+    println( names(df ));
 #    exit(-1)
 
     rename!(df, :k_value => :n, :Running_Time_Sec => :time)

@@ -21,9 +21,15 @@ echo "-----------------------------------------------"
 echo "Generating plots... (patience)"
 scripts/log_fit.jl
 
+
+echo "-----------------------------------------------"
+echo "Generating even more plots... (even more patience)"
+scripts/plots.jl
+
+
 echo "-----------------------------------------------"
 echo "Generating table"
-scripts/generate_table.jl >& misc/rt_table.tex
+scripts/generate_table_3.jl >& misc/rt_table.tex
 
 echo -e "\n\n"
 echo "-----------------------------------------------"
@@ -35,6 +41,12 @@ echo "-----------------------------------------------"
 DPAPER=~/papers/26/k_grid_points/figs/
 cp plots/rt_fit.pdf  $DPAPER
 cp misc/rt_table.tex $DPAPER
+
+cp plots/configs_computed.pdf     $DPAPER
+cp plots/longest_edge_len.pdf     $DPAPER
+cp plots/boundary_grid_points.pdf $DPAPER
+cp plots/vertices.pdf             $DPAPER
+
 
 echo "-----------------------------------------------"
 echo "Copied to $DPAPER"
