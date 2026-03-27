@@ -1,42 +1,52 @@
+//! Geometric primitives and algorithms for the k-perimeter problem.
+//!
+//! This module provides the foundational tools for working with 2D grid points,
+//! calculating areas using Pick's Theorem and the Shoelace formula, computing
+//! convex hulls, and managing the "good set" of points allowed for DP exploration.
+
 use crate::point::*;
 use num::integer::gcd;
+use std::cmp::{max, min};
 
-use std::{
-    cmp::{max, min},
-    //    collections::HashMap,
-    //  ops::{Add, Div, Mul, Sub},
-};
-
+/// Translates a set of points by a given vector `v`.
 pub fn vtrans(p: &[Point2D], v: Point2D) -> Vec<Point2D> {
     p.iter().map(|&pt| pt + v).collect()
 }
 
+/// Checks if three points (a, b, c) form a left turn or are collinear.
+/// Calculated using the 2D cross product.
 #[allow(dead_code)]
 pub fn is_lefteq_turn(a: Point2D, b: Point2D, c: Point2D) -> bool {
     (b.x as i64 - a.x as i64) * (c.y as i64 - a.y as i64)
         >= (b.y as i64 - a.y as i64) * (c.x as i64 - a.x as i64)
 }
 
+/// Euclidean distance between two points.
 pub fn d_y(a: Point2D, b: Point2D) -> f64 {
     (a - b).norm()
 }
 
+/// Checks if three points (a, b, c) form a strict left turn (counter-clockwise).
 pub fn is_left_turn(a: Point2D, b: Point2D, c: Point2D) -> bool {
     (b.x as i64 - a.x as i64) * (c.y as i64 - a.y as i64)
         > (b.y as i64 - a.y as i64) * (c.x as i64 - a.x as i64)
 }
 
+/// Checks if three points (a, b, c) form a strict right turn (clockwise).
 pub fn is_right_turn(a: Point2D, b: Point2D, c: Point2D) -> bool {
     (b.x as i64 - a.x as i64) * (c.y as i64 - a.y as i64)
         < (b.y as i64 - a.y as i64) * (c.x as i64 - a.x as i64)
 }
 
+/// Checks if three points (a, b, c) form a right turn or are collinear.
 #[allow(dead_code)]
 pub fn is_righteq_turn(a: Point2D, b: Point2D, c: Point2D) -> bool {
     (b.x as i64 - a.x as i64) * (c.y as i64 - a.y as i64)
         <= (b.y as i64 - a.y as i64) * (c.x as i64 - a.x as i64)
 }
 
+/// Calculates the shortest distance from point `p` to the line segment `ab`.
+/// Projects `p` onto the line and clamps the projection to the segment's interval [0, 1].
 pub fn distance_to_segment(p: Point2D, a: Point2D, b: Point2D) -> f64 {
     let ab = b - a;
     let ap = p - a;
@@ -57,35 +67,21 @@ pub fn distance_to_segment(p: Point2D, a: Point2D, b: Point2D) -> f64 {
     (p_f - closest_point).norm()
 }
 
+/// Calculates the total Euclidean perimeter of a closed polygon defined by a sequence of points.
 pub fn euclidean_length(sol: &[Point2D]) -> f64 {
-    if sol.is_empty() {
-        return 0.0;
-    }
-    let mut l = (sol
-        .first()
-        .unwrap_or_else(|| {
-            eprintln!("Error: sol is empty in euclidean_length");
-            std::process::exit(1);
-        })
-        .clone()
-        - sol
-            .last()
-            .unwrap_or_else(|| {
-                eprintln!("Error: sol is empty in euclidean_length");
-                std::process::exit(1);
-            })
-            .clone())
-    .norm();
+    if sol.is_empty() { return 0.0; }
+    let mut l = (sol.first().unwrap().clone() - sol.last().unwrap().clone()).norm();
     for i in 1..sol.len() {
         l += (sol[i - 1] - sol[i]).norm();
     }
     l
 }
 
+/// Finds the minimum distance from `query_point` to any point on the boundary of the `poly`.
 pub fn polygon_boundary_distance(poly: &[Point2D], query_point: Point2D) -> f64 {
     let n = poly.len();
     if n < 2 {
-        eprintln!("Error: Polygon must have at least 2 vertices in polygon_boundary_distance");
+        eprintln!("Error: Polygon must have at least 2 vertices");
         std::process::exit(1);
     }
 
@@ -101,6 +97,7 @@ pub fn polygon_boundary_distance(poly: &[Point2D], query_point: Point2D) -> f64 
     min_dist
 }
 
+/// Ray-casting algorithm to determine if a point `p` is inside the polygon `poly`.
 pub fn is_point_in_polygon(poly: &[Point2D], p: Point2D) -> bool {
     let n = poly.len();
     let mut inside = false;
@@ -122,19 +119,17 @@ pub fn is_point_in_polygon(poly: &[Point2D], p: Point2D) -> bool {
     inside
 }
 
+/// Recursively generates Farey-sequence-like primitive vectors between `u` and `v` up to `max_d`.
 pub fn fary(vec: &mut Vec<Point2D>, u: Point2D, v: Point2D, max_d: i64) {
-    if v.x as i64 > max_d {
-        return;
-    }
+    if v.x as i64 > max_d { return; }
     let mid = Point2D::new(u.x + v.x, u.y + v.y);
-    if mid.x as i64 > max_d {
-        return;
-    }
+    if mid.x as i64 > max_d { return; }
     fary(vec, u, mid, max_d);
     vec.push(mid);
     fary(vec, mid, v, max_d);
 }
 
+/// Twice the signed area of a triangle (a, b, c).
 pub fn double_triangle_area(a: Point2D, b: Point2D, c: Point2D) -> i64 {
     (a.x as i64 * (b.y as i64 - c.y as i64)
         + (b.x as i64) * (c.y as i64 - a.y as i64)
@@ -142,31 +137,24 @@ pub fn double_triangle_area(a: Point2D, b: Point2D, c: Point2D) -> i64 {
         .abs() as i64
 }
 
+/// Signed area of a triangle (a, b, c).
 pub fn triangle_area(a: Point2D, b: Point2D, c: Point2D) -> f64 {
     double_triangle_area(a, b, c) as f64 / 2.0
 }
 
-//#[cached]
+/// Returns the number of grid points strictly on the interior of segment (u, v).
+/// Calculated as gcd(|dx|, |dy|) - 1.
 pub fn grid_points_inside_edge(u: Point2D, v: Point2D) -> u32 {
-    if u == v {
-        return 0;
-    }
+    if u == v { return 0; }
     let e = u - v;
     let t = gcd(e.x as i64, e.y as i64);
-    assert!(t >= 1);
-    // Check for overflow before casting
-    if t > 1 + u32::MAX as i64 {
-        eprintln!("Error: grid_points_inside_edge overflow: t = {}", t);
-        std::process::exit(1);
-    }
     (t - 1) as u32
 }
 
+/// Total number of grid points on the boundary of a polygon.
 pub fn boundary_grid_points(poly: &[Point2D]) -> u32 {
     let n = poly.len();
-    if n < 3 {
-        return n as u32; // For degenerate cases, just the vertices
-    }
+    if n < 3 { return n as u32; }
     let mut total = n as u32;
     for i in 0..n {
         let a = poly[i];
@@ -176,11 +164,10 @@ pub fn boundary_grid_points(poly: &[Point2D]) -> u32 {
     total
 }
 
+/// Andrew's Monotone Chain algorithm for computing the convex hull of a set of points.
 pub fn convex_hull(points: &[Point2D]) -> Vec<Point2D> {
     let n = points.len();
-    if n <= 2 {
-        return points.to_vec();
-    }
+    if n <= 2 { return points.to_vec(); }
 
     let mut sorted_points = points.to_vec();
     sorted_points.sort_by(|a, b| a.x.cmp(&b.x).then(a.y.cmp(&b.y)));
@@ -208,695 +195,289 @@ pub fn convex_hull(points: &[Point2D]) -> Vec<Point2D> {
 }
 
 fn get_y_bounds(points: &[Point2D]) -> Option<(CoordType, CoordType)> {
-    if points.is_empty() {
-        return None;
-    }
-
-    // Initialize min and max with the first element's y
+    if points.is_empty() { return None; }
     let initial_y = points[0].y;
-
-    let bounds = points
-        .iter()
-        .skip(1)
-        .fold((initial_y, initial_y), |(min, max), p| {
-            (
-                min.min(p.y), // Returns the minimum of the two
-                max.max(p.y), // Returns the maximum of the two
-            )
-        });
-
+    let bounds = points.iter().skip(1).fold((initial_y, initial_y), |(min, max), p| (min.min(p.y), max.max(p.y)));
     Some(bounds)
 }
 
 fn add_points(points: &mut Vec<Point2D>, y_old: CoordType, y_new: CoordType) -> &mut Vec<Point2D> {
-    // 1. Find matches and create new copies
-    let mut new_points: Vec<Point2D> = points
-        .iter()
-        .filter(|p| p.y == y_old)
-        .map(|p| Point2D { x: p.x, y: y_new })
-        .collect();
-
-    // 2. Add them to the existing vector
+    let mut new_points: Vec<Point2D> = points.iter().filter(|p| p.y == y_old).map(|p| Point2D { x: p.x, y: y_new }).collect();
     points.append(&mut new_points);
-
-    // 3. Sort the vector
-    // Since Point2D derives Ord, it sorts by x then y automatically
     points.sort();
-
-    // 4. Remove consecutive duplicates
     points.dedup();
-
     points
 }
 
-//#[allow(dead_code)]
 fn average_of_min_y(points: &[Point2D]) -> Option<Point2D> {
-    if points.is_empty() {
-        return None;
-    }
-
-    // 1. Find the minimum y-coordinate
+    if points.is_empty() { return None; }
     let min_y = points.iter().map(|p| p.y).min()?;
-
-    // 2. Filter points that have this min_y and sum their coordinates
-    let mut sum_x: i64 = 0;
-    let mut sum_y: i64 = 0;
-    let mut count: i64 = 0;
-
+    let mut sum_x: i64 = 0; let mut sum_y: i64 = 0; let mut count: i64 = 0;
     for p in points.iter().filter(|p| p.y == min_y) {
-        //println!("p.x: {}", p.x);
-        sum_x += p.x as i64;
-        sum_y += p.y as i64;
-        count += 1;
+        sum_x += p.x as i64; sum_y += p.y as i64; count += 1;
     }
-
-    // 3. Calculate averages with rounding up
-    // Formula for ceiling division: (a + b - 1) / b
-    //println!("sum: {}", sum_x);
-    //println!("avg: {}", sum_x / count);
-    //println!("count: {}", count);
     let avg_x = (sum_x / count) as CoordType;
     let avg_y = ((sum_y + count) / count) as CoordType;
-
     Some(Point2D { x: avg_x, y: avg_y })
 }
 
 fn translate_v_points(points: Vec<Point2D>, avg: Point2D) -> Vec<Point2D> {
-    points
-        .iter()
-        .map(|p| Point2D {
-            x: p.x - avg.x,
-            y: p.y - avg.y,
-        })
-        .collect()
+    points.iter().map(|p| Point2D { x: p.x - avg.x, y: p.y - avg.y }).collect()
 }
 
+/// Checks if point `b` lies on the line segment `ac`.
 pub fn is_point_on_segment(a: Point2D, b: Point2D, c: Point2D) -> bool {
-    // check collinear a,b,c
     let cross = (b.x as i64 - a.x as i64) * (c.y as i64 - a.y as i64)
         - (b.y as i64 - a.y as i64) * (c.x as i64 - a.x as i64);
-    if cross != 0 {
-        return false;
-    }
-
-    // degenerate segment case: a == c
-    if a == c {
-        return b == a;
-    }
-
-    let min_x = a.x.min(c.x);
-    let max_x = a.x.max(c.x);
-    let min_y = a.y.min(c.y);
-    let max_y = a.y.max(c.y);
-
+    if cross != 0 { return false; }
+    if a == c { return b == a; }
+    let min_x = a.x.min(c.x); let max_x = a.x.max(c.x);
+    let min_y = a.y.min(c.y); let max_y = a.y.max(c.y);
     b.x >= min_x && b.x <= max_x && b.y >= min_y && b.y <= max_y
 }
 
+/// Simplifies a polygon by removing vertices that are collinear with their adjacent neighbors.
 pub fn polygon_rm_redundant_vertices(poly: &[Point2D]) -> Vec<Point2D> {
     let n = poly.len();
-    if n <= 2 {
-        return poly.to_vec();
-    }
-
+    if n <= 2 { return poly.to_vec(); }
     let mut out = Vec::with_capacity(n);
     for i in 0..n {
         let prev = poly[(i + n - 1) % n];
         let cur = poly[i];
         let next = poly[(i + 1) % n];
-
-        if !is_point_on_segment(prev, cur, next) {
-            out.push(cur);
-        }
+        if !is_point_on_segment(prev, cur, next) { out.push(cur); }
     }
-
-    // If the polygon degenerates to an empty cycle due to all points collinear,
-    // retain at least the first and last unique points, for safety.
-    if out.is_empty() && !poly.is_empty() {
-        out.push(poly[0]);
-    }
-
+    if out.is_empty() && !poly.is_empty() { out.push(poly[0]); }
     out
 }
 
+/// Approximates a disk of ~k grid points around origin.
 pub fn ch_disk_origin(k: usize, f_expand: bool) -> Vec<Point2D> {
     let r = ((k as f64) / std::f64::consts::PI).sqrt() + 2.0;
-
-    //println!("expand: {}", f_expand);
     let mut v = Vec::new();
-    //    let mut v_exp = Vec::new();
     let l_bound = r.ceil() as i32 + 1;
     for x in -l_bound..=l_bound {
         for y in -l_bound..=l_bound {
             let p = Point2D::new(x as CoordType, y as CoordType);
-            /*
-            let mut p_alt = p;
-            if f_expand {
-                if y >= (-l_bound + 1) {
-                    //println!("yes");
-                    p_alt = Point2D::new(x, y + 1);
-                }
-                if y >= (l_bound - 1) {
-                    //println!("no");
-                    p_alt = Point2D::new(x, y - 1);
-                }
-            }*/
-            if p.norm() <= r {
-                v.push(p);
-            }
+            if p.norm() <= r { v.push(p); }
         }
     }
     assert!(v.len() > k);
-    v.sort_by(|a, b| {
-        a.norm_sq().partial_cmp(&b.norm_sq()).unwrap_or_else(|| {
-            eprintln!("Error: NaN encountered in partial_cmp in ch_disk_origin");
-            std::process::exit(1);
-        })
-    });
+    v.sort_by(|a, b| a.norm_sq().partial_cmp(&b.norm_sq()).unwrap());
     v.truncate(k);
-    //println!("v_len: {}", v.len());
 
-    let Some((min_y, max_y)) = get_y_bounds(&v) else {
-        eprintln!("Error: The vector was empty in ch_disk_origin");
-        std::process::exit(1);
-    };
-
+    let Some((min_y, max_y)) = get_y_bounds(&v) else { std::process::exit(1); };
     if f_expand {
         add_points(&mut v, max_y - 1, max_y);
         add_points(&mut v, min_y + 1, min_y);
     }
-
-    //println!("{}...{}", min_y, max_y);
-    // Equivalent of sort!( V, by = p -> (p.x, p.y) )
     v.sort_by(|a, b| a.x.cmp(&b.x).then(a.y.cmp(&b.y)));
 
     let mut out = Vec::new();
     let len = v.len();
     for i in 0..len {
-        if i == 0 || i == len - 1 {
-            out.push(v[i]);
-            continue;
-        }
-        if v[i].x == v[i - 1].x && v[i].x == v[i + 1].x {
-            continue;
-        }
+        if i == 0 || i == len - 1 { out.push(v[i]); continue; }
+        if v[i].x == v[i - 1].x && v[i].x == v[i + 1].x { continue; }
         out.push(v[i]);
     }
 
     let ch = convex_hull(&out);
-    let min_y = ch.iter().map(|p| p.y).min().unwrap_or_else(|| {
-        eprintln!("Error: Convex hull was empty when getting min_y in ch_disk_origin");
-        std::process::exit(1);
-    });
-    let max_x = ch
-        .iter()
-        .filter(|p| p.y == min_y)
-        .map(|p| p.x)
-        .max()
-        .unwrap_or_else(|| {
-            eprintln!("Error: Convex hull was empty when getting max_x in ch_disk_origin");
-            std::process::exit(1);
-        });
-
-    let Some(avg) = average_of_min_y(&ch) else {
-        eprintln!("Error: Vector empty in average_of_min_y called by ch_disk_origin");
-        std::process::exit(1);
-    };
+    let min_y = ch.iter().map(|p| p.y).min().unwrap();
+    let max_x = ch.iter().filter(|p| p.y == min_y).map(|p| p.x).max().unwrap();
+    let Some(avg) = average_of_min_y(&ch) else { std::process::exit(1); };
 
     let l = ((max_x - avg.x) / 2).abs();
-
-    //println!("AVERGAE: ({},{})", avg.x, avg.y);
-    //println!("max_x: {}", max_x);
-    let mut mv = Point2D {
-        x: max_x - 1,
-        y: min_y,
-    };
-    if f_expand {
-        mv = Point2D {
-            x: max_x - l,
-            y: min_y,
-        };
-    }
-    //println!("MV: ( {}, {} )", mv.x, mv.y);
-    let ch_n = translate_v_points(ch, mv);
-
-    //println!("{:#?}", ch_n);
-
-    ch_n
-    //ch.iter().map(|&p| p - Point2D::new(avg.x, avg.y)).collect();
+    let mut mv = Point2D { x: max_x - 1, y: min_y };
+    if f_expand { mv = Point2D { x: max_x - l, y: min_y }; }
+    translate_v_points(ch, mv)
 }
 
+/// Generates all primitive integer vectors (dx, dy) with length <= `max_d`.
 pub fn generate_primitive_vectors(max_d: u32) -> Vec<Point2D> {
-    let mut vec = Vec::new();
-    let mut tvec = Vec::new();
-    fary(
-        &mut tvec,
-        Point2D::new(1, 0),
-        Point2D::new(1, 1),
-        max_d as i64,
-    );
-
-    vec.push(Point2D::new(1, 0));
-    vec.extend(&tvec);
-    vec.push(Point2D::new(1, 1));
-
-    for v in tvec.iter().rev() {
-        vec.push(Point2D::new(v.y, v.x));
-    }
-
+    let mut vec = Vec::new(); let mut tvec = Vec::new();
+    fary(&mut tvec, Point2D::new(1, 0), Point2D::new(1, 1), max_d as i64);
+    vec.push(Point2D::new(1, 0)); vec.extend(&tvec); vec.push(Point2D::new(1, 1));
+    for v in tvec.iter().rev() { vec.push(Point2D::new(v.y, v.x)); }
     let len = vec.len();
-    for i in 0..len {
-        let p = vec[i];
-        vec.push(Point2D::new(-p.y, p.x));
-    }
-
+    for i in 0..len { let p = vec[i]; vec.push(Point2D::new(-p.y, p.x)); }
     let len2 = vec.len();
-    for i in 0..len2 {
-        let p = vec[i];
-        vec.push(Point2D::new(-p.x, -p.y));
-    }
+    for i in 0..len2 { let p = vec[i]; vec.push(Point2D::new(-p.x, -p.y)); }
     vec
 }
 
+/// Checks if three points are collinear.
 pub fn is_colinear(a: Point2D, b: Point2D, c: Point2D) -> bool {
     (b.x - a.x) * (c.y - a.y) == (b.y - a.y) * (c.x - a.x)
 }
 
-pub fn count_distinct(a: Point2D, b: Point2D, c: Point2D) -> u32 {
-    if a == b && b == c {
-        1
-    } else if a == b || a == c || b == c {
-        2
-    } else {
-        3
-    }
+fn count_distinct(a: Point2D, b: Point2D, c: Point2D) -> u32 {
+    if a == b && b == c { 1 } else if a == b || a == c || b == c { 2 } else { 3 }
 }
 
+/// Counts new internal and boundary grid points added by forming a triangle (origin, a, b).
+/// Uses Pick's Theorem ($A = I + B/2 - 1$) to solve for $I$.
 pub fn triangle_count_new_points(a: Point2D, b: Point2D, c: Point2D) -> (u32, u32) {
     let area2 = double_triangle_area(a, b, c);
     let ab_g_n = grid_points_inside_edge(a, b);
     let bc_g_n = grid_points_inside_edge(b, c);
     let ac_g_n = grid_points_inside_edge(a, c);
-
-    // Use u64 to prevent overflow in boundary calculation
-    let boundary_n: u64 =
-        ab_g_n as u64 + bc_g_n as u64 + ac_g_n as u64 + count_distinct(a, b, c) as u64;
+    let boundary_n: u64 = ab_g_n as u64 + bc_g_n as u64 + ac_g_n as u64 + count_distinct(a, b, c) as u64;
 
     let tri_i_new = if area2 > 0 {
-        let area_i64 = area2 as i64;
-        let boundary_i64 = boundary_n as i64;
+        let area_i64 = area2 as i64; let boundary_i64 = boundary_n as i64;
         let result = (area_i64 - boundary_i64 + 2) / 2;
-        if result < 0 || result > u32::MAX as i64 {
-            eprintln!("Error: tri_i_new overflow: {}", result);
-            std::process::exit(1);
-        }
         result as u32
-    } else {
-        0
-    };
+    } else { 0 };
 
-    let tri_b_new: i32 = if a == c {
-        eprintln!("Error: a == c inside triangle_count_new_points");
-        std::process::exit(1);
-    } else if a == b {
-        let result = ac_g_n as i64 + 1;
-        if result > i32::MAX as i64 {
-            eprintln!("Error: tri_b_new overflow in ac_g_n case: {}", result);
-            std::process::exit(1);
-        }
-        result as i32
-    } else if area2 == 0 {
-        let result = bc_g_n as i64 + 1;
-        if result > i32::MAX as i64 {
-            eprintln!("Error: tri_b_new overflow in area2==0 case: {}", result);
-            std::process::exit(1);
-        }
-        result as i32
-    } else {
-        let result = ac_g_n as i64 + bc_g_n as i64 + 1;
-        if result > i32::MAX as i64 {
-            eprintln!("Error: tri_b_new overflow in else case: {}", result);
-            std::process::exit(1);
-        }
-        result as i32
-    };
-
-    //assert!(tri_i_new >= 0);
-    assert!(tri_b_new >= 0);
+    let tri_b_new: i32 = if a == c { std::process::exit(1); }
+    else if a == b { ac_g_n as i32 + 1 }
+    else if area2 == 0 { bc_g_n as i32 + 1 }
+    else { ac_g_n as i32 + bc_g_n as i32 + 1 };
 
     (tri_i_new, tri_b_new as u32)
 }
 
-#[allow(dead_code)]
-pub fn angle_between(p1: Point2D, p2: Point2D) -> f64 {
-    let dot_prod = (p1.x * p2.x + p1.y * p2.y) as f64;
-    let det_prod = (p1.x * p2.y - p1.y * p2.x) as f64;
-    det_prod.atan2(dot_prod)
-}
-
+/// Calculates the bounding box of a collection of polygons.
 pub fn bound(polys: &[&[Point2D]], expand: i32) -> (CoordType, CoordType, CoordType, CoordType) {
-    let mut min_x = 0;
-    let mut max_x = 0;
-    let mut min_y = 0;
-    let mut max_y = 0;
+    let mut min_x = 0; let mut max_x = 0; let mut min_y = 0; let mut max_y = 0;
     let mut f_init = false;
-
     for &poly in polys {
-        if poly.is_empty() {
-            continue;
-        }
-        let px_min = poly.iter().map(|p| p.x).min().unwrap_or_else(|| {
-            eprintln!("Error: poly is empty in bound");
-            std::process::exit(1);
-        }) - 1;
-        let px_max = poly.iter().map(|p| p.x).max().unwrap_or_else(|| {
-            eprintln!("Error: poly is empty in bound");
-            std::process::exit(1);
-        }) + 1;
-        let py_min = poly.iter().map(|p| p.y).min().unwrap_or_else(|| {
-            eprintln!("Error: poly is empty in bound");
-            std::process::exit(1);
-        }) - 1;
-        let py_max = poly.iter().map(|p| p.y).max().unwrap_or_else(|| {
-            eprintln!("Error: poly is empty in bound");
-            std::process::exit(1);
-        }) + 1;
-
+        if poly.is_empty() { continue; }
+        let px_min = poly.iter().map(|p| p.x).min().unwrap() - 1;
+        let px_max = poly.iter().map(|p| p.x).max().unwrap() + 1;
+        let py_min = poly.iter().map(|p| p.y).min().unwrap() - 1;
+        let py_max = poly.iter().map(|p| p.y).max().unwrap() + 1;
         if !f_init {
-            min_x = px_min;
-            max_x = px_max;
-            min_y = py_min;
-            max_y = py_max;
-            f_init = true;
+            min_x = px_min; max_x = px_max; min_y = py_min; max_y = py_max; f_init = true;
         } else {
-            min_x = min_x.min(px_min);
-            max_x = max_x.max(px_max);
-            min_y = min_y.min(py_min);
-            max_y = max_y.max(py_max);
+            min_x = min_x.min(px_min); max_x = max_x.max(px_max); min_y = min_y.min(py_min); max_y = max_y.max(py_max);
         }
     }
-    min_x = min_x - expand as CoordType;
-    max_x = max_x + expand as CoordType;
-    min_y = min_y - expand as CoordType;
-    max_y = max_y + expand as CoordType;
-    (
-        min_x - expand as CoordType,
-        max_x + expand as CoordType,
-        min_y - expand as CoordType,
-        max_y + expand as CoordType,
-    )
+    (min_x - expand as CoordType, max_x + expand as CoordType, min_y - expand as CoordType, max_y + expand as CoordType)
 }
 
+/// A structure for managing a grid of points and associated properties.
 #[derive(Debug)]
 pub struct GridSet {
-    pub min_x: CoordType,
-    pub max_x: CoordType,
-    pub min_y: CoordType,
-    pub max_y: CoordType,
-    _size: usize,
-    width: usize,
-    data: Vec<bool>,
-    dto: Vec<f64>, // Distance to origin
-    point_id: Vec<usize>,
-    pub points: Vec<Point2D>,
-    //pub point_to_id: HashMap<Point2D, usize>,
-    dto_g: Vec<i64>, // Number of grid points inside distance to origin
-    topo_idx: Vec<u32>,
+    pub min_x: CoordType, pub max_x: CoordType, pub min_y: CoordType, pub max_y: CoordType,
+    _size: usize, width: usize, data: Vec<bool>, dto: Vec<f64>, point_id: Vec<usize>,
+    pub points: Vec<Point2D>, dto_g: Vec<i64>, topo_idx: Vec<u32>,
 }
 
 impl GridSet {
     pub fn new(min_x: CoordType, max_x: CoordType, min_y: CoordType, max_y: CoordType) -> Self {
         let width = (max_x - min_x + 1).max(0) as usize;
         let height = (max_y - min_y + 1).max(0) as usize;
-        let _size = match width.checked_mul(height) {
-            Some(size) if size <= 100_000_000 => size, // Max 100M grid points
-            Some(_) => {
-                eprintln!("Error: Grid too large: {}x{}", width, height);
-                std::process::exit(1);
-            }
-            None => {
-                eprintln!("Error: Grid size overflow");
-                std::process::exit(1);
-            }
-        };
-        println!("Size: {}", _size);
+        let _size = width * height;
         Self {
-            min_x,
-            max_x,
-            min_y,
-            max_y,
-            _size,
-            width,
-            points: Vec::new(),
-            // point_to_id: HashMap::new(),
-            data: vec![false; _size],
-            dto: vec![-1.0; _size],
-            point_id: vec![usize::MAX; _size],
-            dto_g: vec![0; _size],
-            topo_idx: Vec::new(),
+            min_x, max_x, min_y, max_y, _size, width, points: Vec::new(),
+            data: vec![false; _size], dto: vec![-1.0; _size],
+            point_id: vec![usize::MAX; _size], dto_g: vec![0; _size], topo_idx: Vec::new(),
         }
     }
-
-    pub fn get_topo_idx(&self, id: usize) -> u32 {
-        self.topo_idx[id]
-    }
-
+    pub fn get_topo_idx(&self, id: usize) -> u32 { self.topo_idx[id] }
     pub fn set_topo_idx(&mut self, id: usize, idx: u32) {
-        if self.topo_idx.is_empty() {
-            self.topo_idx = vec![0; self.points.len()];
-        }
+        if self.topo_idx.is_empty() { self.topo_idx = vec![0; self.points.len()]; }
         self.topo_idx[id] = idx;
     }
-
-    pub fn length(&self) -> usize {
-        let count = self.data.iter().filter(|&&x| x).count();
-
-        count
-    }
-
+    #[allow(dead_code)]
+    pub fn length(&self) -> usize { self.data.iter().filter(|&&x| x).count() }
     pub fn insert(&mut self, p: Point2D) {
         if p.x >= self.min_x && p.x <= self.max_x && p.y >= self.min_y && p.y <= self.max_y {
             let idx = (p.y - self.min_y) as usize * self.width + (p.x - self.min_x) as usize;
             self.data[idx] = true;
         }
     }
-
     pub fn delete(&mut self, p: Point2D) {
         if p.x >= self.min_x && p.x <= self.max_x && p.y >= self.min_y && p.y <= self.max_y {
             let idx = (p.y - self.min_y) as usize * self.width + (p.x - self.min_x) as usize;
             self.data[idx] = false;
         }
     }
-
     fn get_index(&self, p: Point2D) -> usize {
-        if p.x >= self.min_x && p.x <= self.max_x && p.y >= self.min_y && p.y <= self.max_y {
-            let idx = (p.y - self.min_y) as usize * self.width + (p.x - self.min_x) as usize;
-            idx
-        } else {
-            panic!("Point is outside the grid");
-        }
+        (p.y - self.min_y) as usize * self.width + (p.x - self.min_x) as usize
     }
-
     pub fn insert_val(&mut self, p: Point2D, val: f64, g: i64) {
-        let idx = self.get_index(p);
-        self.dto[idx] = val;
-        self.dto_g[idx] = g;
+        let idx = self.get_index(p); self.dto[idx] = val; self.dto_g[idx] = g;
     }
-
-    #[allow(dead_code)]
     pub fn get_dto(&self, p: Point2D) -> (f64, i64) {
         if p.x >= self.min_x && p.x <= self.max_x && p.y >= self.min_y && p.y <= self.max_y {
-            let idx = (p.y - self.min_y) as usize * self.width + (p.x - self.min_x) as usize;
-            (self.dto[idx], self.dto_g[idx])
-        } else {
-            (self.min_x as f64 * self.min_x as f64, 0)
-        }
+            let idx = self.get_index(p); (self.dto[idx], self.dto_g[idx])
+        } else { (self.min_x as f64 * self.min_x as f64, 0) }
     }
-
     pub fn contains(&self, p: &Point2D) -> bool {
         if p.x >= self.min_x && p.x <= self.max_x && p.y >= self.min_y && p.y <= self.max_y {
-            let idx = (p.y - self.min_y) as usize * self.width + (p.x - self.min_x) as usize;
-            self.data[idx]
-        } else {
-            false
-        }
+            self.data[self.get_index(*p)]
+        } else { false }
     }
-
     pub fn compute_points(&mut self) {
-        self.points.clear();
-        self.topo_idx.clear();
-        //self.point_id.clear();
+        self.points.clear(); self.topo_idx.clear();
         for y in self.min_y..=self.max_y {
             for x in self.min_x..=self.max_x {
                 let p = Point2D::new(x, y);
                 if self.contains(&p) {
-                    let id = self.points.len();
-                    self.points.push(p);
-                    self.topo_idx.push(0);
-                    let index = self.get_index(p);
-                    self.point_id[index] = id;
+                    let id = self.points.len(); self.points.push(p); self.topo_idx.push(0);
+                    let index = self.get_index(p); self.point_id[index] = id;
                 }
             }
         }
     }
-
-    pub fn get_point_by_id(&self, id: usize) -> &Point2D {
-        // self.points.get(id)
-        &(self.points[id])
-    }
-
-    pub fn get_point_id(&self, p: Point2D) -> usize {
-        self.point_id[self.get_index(p)]
-    }
-
-    pub fn num_points(&self) -> usize {
-        self.points.len()
-    }
-
+    pub fn get_point_by_id(&self, id: usize) -> &Point2D { &self.points[id] }
+    pub fn get_point_id(&self, p: Point2D) -> usize { self.point_id[self.get_index(p)] }
+    pub fn num_points(&self) -> usize { self.points.len() }
     pub fn fill_dist_to_origin(&mut self, bad_ch: &[Point2D]) {
         for y in self.min_y..=self.max_y {
-            if y < 0 {
-                continue;
-            }
+            if y < 0 { continue; }
             for x in self.min_x..=self.max_x {
                 let p = Point2D::new(x, y);
-                if !self.contains(&p) {
-                    continue;
+                if self.contains(&p) {
+                    let (l, g) = distance_to_origin(bad_ch, p); self.insert_val(p, l, g);
                 }
-                //println!("Computing distance to origin for point: ({}, {})", p.x, p.y);
-
-                let (l, g) = distance_to_origin(bad_ch, p);
-                self.insert_val(p, l, g);
             }
         }
     }
 }
 
-/// Determines the orientation of ordered triplet (p, q, r).
-/// Returns:
-///  0 -> p, q and r are collinear
-///  1 -> Clockwise
-///  2 -> Counterclockwise
-fn orientation(p: Point2D, q: Point2D, r: Point2D) -> i32 {
-    let val = (q.y as i64 - p.y as i64) * (r.x as i64 - q.x as i64)
-        - (q.x as i64 - p.x as i64) * (r.y as i64 - q.y as i64);
-    if val == 0 {
-        return 0;
-    }
-    if val > 0 {
-        1
-    } else {
-        2
-    }
-}
-
-/// Checks if point 'q' lies on line segment 'pr'
-fn on_segment(p: Point2D, q: Point2D, r: Point2D) -> bool {
-    q.x <= p.x.max(r.x) && q.x >= p.x.min(r.x) && q.y <= p.y.max(r.y) && q.y >= p.y.min(r.y)
-}
-
-/// Returns true if segment p1q1 and p2q2 intersect.
 fn segments_intersect(p1: Point2D, q1: Point2D, p2: Point2D, q2: Point2D) -> bool {
-    let o1 = orientation(p1, q1, p2);
-    let o2 = orientation(p1, q1, q2);
-    let o3 = orientation(p2, q2, p1);
-    let o4 = orientation(p2, q2, q1);
-
-    // General case: segments straddle each other
-    if o1 != o2 && o3 != o4 {
-        return true;
+    fn orientation(p: Point2D, q: Point2D, r: Point2D) -> i32 {
+        let val = (q.y as i64 - p.y as i64) * (r.x as i64 - q.x as i64) - (q.x as i64 - p.x as i64) * (r.y as i64 - q.y as i64);
+        if val == 0 { 0 } else if val > 0 { 1 } else { 2 }
     }
-
-    // Special Cases: Collinear points
-    if o1 == 0 && on_segment(p1, p2, q1) {
-        return true;
+    fn on_segment(p: Point2D, q: Point2D, r: Point2D) -> bool {
+        q.x <= p.x.max(r.x) && q.x >= p.x.min(r.x) && q.y <= p.y.max(r.y) && q.y >= p.y.min(r.y)
     }
-    if o2 == 0 && on_segment(p1, q2, q1) {
-        return true;
-    }
-    if o3 == 0 && on_segment(p2, p1, q2) {
-        return true;
-    }
-    if o4 == 0 && on_segment(p2, q1, q2) {
-        return true;
-    }
-
+    let o1 = orientation(p1, q1, p2); let o2 = orientation(p1, q1, q2);
+    let o3 = orientation(p2, q2, p1); let o4 = orientation(p2, q2, q1);
+    if o1 != o2 && o3 != o4 { return true; }
+    if o1 == 0 && on_segment(p1, p2, q1) { return true; }
+    if o2 == 0 && on_segment(p1, q2, q1) { return true; }
+    if o3 == 0 && on_segment(p2, p1, q2) { return true; }
+    if o4 == 0 && on_segment(p2, q1, q2) { return true; }
     false
 }
 
-/// Main function: Checks if segment (s1, s2) intersects the polygon boundary
 pub fn does_segment_intersect_polygon(polygon: &[Point2D], s1: Point2D, s2: Point2D) -> bool {
     let n = polygon.len();
-    if n < 3 {
-        return false;
-    }
-
-    for i in 0..n {
-        let v1 = polygon[i];
-        let v2 = polygon[(i + 1) % n]; // Wraps around to close the polygon
-
-        if segments_intersect(s1, s2, v1, v2) {
-            return true;
-        }
-    }
-
+    for i in 0..n { if segments_intersect(s1, s2, polygon[i], polygon[(i + 1) % n]) { return true; } }
     false
 }
 
 pub fn is_all_left_turns(p: Point2D, p_next: Point2D, v: &[Point2D]) -> bool {
-    // Vector A = p_next - p
-    let ax = p_next.x - p.x;
-    let ay = p_next.y - p.y;
-
-    for q in v {
-        // Vector B = q - p_next
-        let bx = q.x - p_next.x;
-        let by = q.y - p_next.y;
-
-        // The 2D cross product (Z-component of 3D cross product)
-        // formula: ax * by - ay * bx
-        let cross_product = ax * by - ay * bx;
-
-        // If cross_product > 0, it's a left turn.
-        // If cross_product < 0, it's a right turn.
-        // If cross_product == 0, the points are collinear.
-        if cross_product <= 0 {
-            return false;
-        }
-    }
-
+    let ax = p_next.x - p.x; let ay = p_next.y - p.y;
+    for q in v { if (ax * (q.y - p_next.y) - ay * (q.x - p_next.x)) <= 0 { return false; } }
     true
 }
 
+/// Calculates the shortest distance and enclosed points from origin to point `p`, respecting obstacles.
 pub fn distance_to_origin(bad_ch: &[Point2D], p: Point2D) -> (f64, i64) {
     let origin = Point2D { x: 0, y: 0 };
-    if !does_segment_intersect_polygon(bad_ch, origin, p) {
-        return (d_y(origin, p), 0);
-    }
-    let mut pnts = bad_ch.to_vec();
-    pnts.push(origin);
-    pnts.push(p);
+    if !does_segment_intersect_polygon(bad_ch, origin, p) { return (d_y(origin, p), 0); }
+    let mut pnts = bad_ch.to_vec(); pnts.push(origin); pnts.push(p);
     let poly = convex_hull(&pnts);
-    //println!("computed convex-hull");
-    let n = poly.len();
-    assert!(n > 2);
-    assert!(is_left_turn(poly[0], poly[1], poly[2]));
-
-    // This will return the index or panic with the message provided
-    let i_o = poly.iter().position(|&x| x == origin).unwrap_or_else(|| {
-        eprintln!("Error: Origin not found in CH! in distance_to_origin");
-        std::process::exit(1);
-    });
-    let i_p = poly.iter().position(|&x| x == p).unwrap_or_else(|| {
-        eprintln!("Error: p not found in CH! in distance_to_origin");
-        std::process::exit(1);
-    });
-
-    let s = min(i_o, i_p);
-    let t = max(i_o, i_p);
-    assert!(s < t);
-    let mut t_l = 0.0;
-    let mut t_b = 1;
-    let mut area = 0.0;
+    let i_o = poly.iter().position(|&x| x == origin).unwrap();
+    let i_p = poly.iter().position(|&x| x == p).unwrap();
+    let (s, t) = (min(i_o, i_p), max(i_o, i_p));
+    let mut t_l = 0.0; let mut t_b = 1; let mut area = 0.0;
     for k in s..t {
         t_l += d_y(poly[k], poly[k + 1]);
         t_b += grid_points_inside_edge(poly[k], poly[k + 1]) + 1;
@@ -904,48 +485,22 @@ pub fn distance_to_origin(bad_ch: &[Point2D], p: Point2D) -> (f64, i64) {
     }
     let b_edge = grid_points_inside_edge(poly[s], poly[t]);
     t_b += b_edge;
-
-    // Picks theorem: A = I + B/2 - 1
-    let i_verts = (area - t_b as f64 / 2.0 + 1.0) as i64; // Number of internal vertices in new polygon
+    let i_verts = (area - t_b as f64 / 2.0 + 1.0) as i64;
     let g_overall: i64 = i_verts + t_b as i64 - b_edge as i64 - 2;
-    /*println!(
-        "t_l: {}, t_b: {}, area: {}, i_verts: {}, g_overall: {}",
-        t_l, t_b, area, i_verts, g_overall
-    );*/
-    if i_p < i_o {
-        return (t_l, g_overall);
-    }
-    //println!("i_p: {}, i_o: {}", i_p, i_o);
+    if i_p < i_o { return (t_l, g_overall); }
     let total_area = polygon_area(&poly);
     let mut total_b = 0;
-    for k in 0..n {
-        let p1 = poly[k];
-        let p2 = poly[(k + 1) % n];
-        let b = grid_points_inside_edge(p1, p2) + 1;
-        total_b += b;
-    }
-
+    for k in 0..poly.len() { total_b += grid_points_inside_edge(poly[k], poly[(k + 1) % poly.len()]) + 1; }
     let comp_area = total_area - area;
-
-    /*println!(
-        "Computed: total_b: {}, t_b: {}, b_edge: {}",
-        total_b, t_b, b_edge
-    );*/
     let comp_b = total_b + b_edge + 2 - t_b;
-    let g_comp: i64 = (comp_area - comp_b as f64 / 2.0 + 1.0) as i64; // Number of internal vertices in new polygon
-
-    assert!(g_comp >= 0);
-
-    let total_l = euclidean_length(&poly);
-    (total_l - t_l, g_comp)
+    let g_comp: i64 = (comp_area - comp_b as f64 / 2.0 + 1.0) as i64;
+    (euclidean_length(&poly) - t_l, g_comp)
 }
 
 pub fn polygon_area(poly: &[Point2D]) -> f64 {
     let mut area: f64 = 0.0;
-    let n = poly.len();
-    for i in 0..n {
-        let p1 = poly[i];
-        let p2 = poly[(i + 1) % n];
+    for i in 0..poly.len() {
+        let (p1, p2) = (poly[i], poly[(i + 1) % poly.len()]);
         area += (p1.x as f64 * p2.y as f64) - (p2.x as f64 * p1.y as f64);
     }
     (area / 2.0).abs()
@@ -954,162 +509,63 @@ pub fn polygon_area(poly: &[Point2D]) -> f64 {
 pub fn compute_good_set(ch_m: &[Point2D], d_bad: f64) -> (GridSet, Vec<Point2D>, Vec<Point2D>) {
     let expand = (3.0 * d_bad + 3.0).ceil() as i32;
     let (min_x, max_x, _, max_y) = bound(&[ch_m], expand);
-    let min_y = 0;
-
-    //let mut bad = GridSet::new(min_x, max_x, min_y, max_y);
-    let mut good = GridSet::new(min_x, max_x, min_y, max_y);
-    let mut bad_in: Vec<Point2D> = Vec::new();
-    let mut so_so: Vec<Point2D> = Vec::new();
-    for y in min_y..=max_y {
-        if y < 0 {
-            continue;
-        }
+    let mut good = GridSet::new(min_x, max_x, 0, max_y);
+    let (mut bad_in, mut so_so) = (Vec::new(), Vec::new());
+    for y in 0..=max_y {
         for x in min_x..=max_x {
             let p = Point2D::new(x, y);
-            let f_in = is_point_in_polygon(ch_m, p);
-            let d = polygon_boundary_distance(ch_m, p);
-
-            if d > d_bad {
-                // bad.insert(p);
-                if f_in {
-                    bad_in.push(p);
-                    so_so.push(p);
-                }
-
-                continue;
-            }
-
-            if f_in || d <= d_bad {
-                good.insert(p);
-                so_so.push(p);
-            }
+            let (f_in, d) = (is_point_in_polygon(ch_m, p), polygon_boundary_distance(ch_m, p));
+            if d > d_bad { if f_in { bad_in.push(p); so_so.push(p); } continue; }
+            if f_in || d <= d_bad { good.insert(p); so_so.push(p); }
         }
     }
-
     bad_in.push(Point2D { x: 0, y: 0 });
-    let bad_ch_ext = convex_hull(&bad_in);
-    bad_in.pop();
-
-    for y in min_y..=max_y {
+    let bad_ch_ext = convex_hull(&bad_in); bad_in.pop();
+    for y in 0..=max_y {
         for x in min_x..=max_x {
-            if x == 0 && y == 0 {
-                continue;
-            }
             let p = Point2D::new(x, y);
-            if !good.contains(&p) {
-                continue;
+            if (x != 0 || y != 0) && good.contains(&p) && is_point_in_polygon(&bad_ch_ext, p) {
+                good.delete(p); bad_in.push(p);
             }
-            if !is_point_in_polygon(&bad_ch_ext, p) {
-                continue;
-            }
-            good.delete(p);
-            //bad.insert(p);
-            bad_in.push(p);
         }
     }
-    let bad_ch = convex_hull(&bad_in);
-    good.compute_points();
-
+    let bad_ch = convex_hull(&bad_in); good.compute_points();
     (good, bad_ch, so_so)
 }
 
 #[allow(dead_code)]
 pub fn len_longest_edge(poly: &[Point2D]) -> f64 {
-    let n = poly.len();
-    if n < 2 {
-        return 0.0;
+    let mut max_sq = 0;
+    for i in 0..poly.len() {
+        let (p1, p2) = (poly[i], poly[(i + 1) % poly.len()]);
+        max_sq = max_sq.max(dot(&(p2 - p1), &(p2 - p1)));
     }
-
-    let mut max_dist_sq: i64 = 0;
-
-    for i in 0..n {
-        let p1 = poly[i];
-        let p2 = poly[(i + 1) % n]; // Wraps around to the first point
-
-        let dx = p2.x - p1.x;
-        let dy = p2.y - p1.y;
-
-        // Calculate squared distance: dx^2 + dy^2
-        let dist_sq = dx as i64 * dx as i64 + dy as i64 * dy as i64;
-
-        if dist_sq > max_dist_sq {
-            max_dist_sq = dist_sq;
-        }
-    }
-
-    // Convert to f64 and take the square root once
-    (max_dist_sq as f64).sqrt()
+    (max_sq as f64).sqrt()
 }
 
+#[allow(dead_code)]
 pub fn len_longest_primitive_edge(poly: &[Point2D]) -> f64 {
-    let n = poly.len();
-    if n < 2 {
-        return 0.0;
+    let mut max_sq = 0;
+    for i in 0..poly.len() {
+        let (p1, p2) = (poly[i], poly[(i + 1) % poly.len()]);
+        let mut d = p2 - p1;
+        let g = gcd(d.x.abs() as u64, d.y.abs() as u64) as i64;
+        d.x /= g as CoordType; d.y /= g as CoordType;
+        max_sq = max_sq.max(dot(&d, &d));
     }
-
-    let mut max_dist_sq: i64 = 0;
-
-    for i in 0..n {
-        let p1 = poly[i];
-        let p2 = poly[(i + 1) % n]; // Wraps around to the first point
-
-        let mut dx: i64 = p2.x as i64 - p1.x as i64;
-        let mut dy: i64 = p2.y as i64 - p1.y as i64;
-        let g_c_d = gcd(dx.abs() as u64, dy.abs() as u64);
-
-        dx = dx / (g_c_d as i64);
-        dy = dy / (g_c_d as i64);
-
-        // Calculate squared distance: dx^2 + dy^2
-        let dist_sq = dx as i64 * dx as i64 + dy as i64 * dy as i64;
-
-        if dist_sq > max_dist_sq {
-            max_dist_sq = dist_sq;
-        }
-    }
-
-    // Convert to f64 and take the square root once
-    (max_dist_sq as f64).sqrt()
+    (max_sq as f64).sqrt()
 }
 
-/// Computes the maximum turn angle in degrees for a convex polygon.
+#[allow(dead_code)]
 pub fn compute_max_turn_angle(poly: &[Point2D]) -> f64 {
-    let n = poly.len();
-    if n < 3 {
-        return 0.0;
-    }
-
-    let mut max_angle_rad: f64 = 0.0;
-
-    for i in 0..n {
-        // Points: current, next, and the one after that
-        let p1 = poly[i];
-        let p2 = poly[(i + 1) % n];
-        let p3 = poly[(i + 2) % n];
-
-        // Vector A (p1 -> p2)
-        let ax = (p2.x - p1.x) as f64;
-        let ay = (p2.y - p1.y) as f64;
-
-        // Vector B (p2 -> p3)
-        let bx = (p3.x - p2.x) as f64;
-        let by = (p3.y - p2.y) as f64;
-
-        let mag_a = (ax * ax + ay * ay).sqrt();
-        let mag_b = (bx * bx + by * by).sqrt();
-
-        if mag_a > 0.0 && mag_b > 0.0 {
-            // Dot product: A · B = |A||B| cos(theta)
-            let dot = ax * bx + ay * by;
-            let cos_theta = (dot / (mag_a * mag_b)).clamp(-1.0, 1.0);
-
-            let angle = cos_theta.acos();
-            if angle > max_angle_rad {
-                max_angle_rad = angle;
-            }
+    let mut max_angle: f64 = 0.0;
+    for i in 0..poly.len() {
+        let (p1, p2, p3) = (poly[i], poly[(i + 1) % poly.len()], poly[(i + 2) % poly.len()]);
+        let (v1, v2) = (p2 - p1, p3 - p2);
+        let (m1, m2) = (v1.norm(), v2.norm());
+        if m1 > 0.0 && m2 > 0.0 {
+            max_angle = max_angle.max((dot(&v1, &v2) as f64 / (m1 * m2)).clamp(-1.0, 1.0).acos());
         }
     }
-
-    // Convert radians to degrees
-    max_angle_rad
+    max_angle
 }

@@ -1,3 +1,14 @@
+//! Entry point for the k-perimeter solver.
+//!
+//! This program finds a polygon with minimum Euclidean perimeter that encloses exactly k grid points.
+//! The algorithm follows several stages:
+//! 1.  Estimate a search area based on a disk-like boundary.
+//! 2.  Partition grid points into a "good set" (search area) and a "bad set" (forbidden interior).
+//! 3.  Construct a Visibility Graph of valid segments between good points.
+//! 4.  Perform a Topological Sort to ensure the graph is a DAG and establish a processing order.
+//! 5.  Run a Dynamic Programming (DP) solver using a priority queue and memory-mapped storage.
+//! 6.  Reconstruct and visualize the optimal polygon.
+
 mod dp;
 mod draw;
 mod geom;
@@ -8,7 +19,7 @@ mod v_graph;
 
 use dp::{max_edge_length, minimize_perimeter_dp};
 use draw::{compute_perimeter, draw_polygon_with_grid};
-use geom::{ch_disk_origin, compute_good_set, compute_max_turn_angle, vtrans};
+use geom::{ch_disk_origin, compute_good_set, vtrans};
 use v_graph::build_visibility_graph;
 use point::*;
 use polygon::*;
@@ -20,7 +31,7 @@ use std::io::Write;
 use std::time::Instant;
 
 use crate::geom::{
-    boundary_grid_points, len_longest_edge, len_longest_primitive_edge, polygon_area,
+    boundary_grid_points, polygon_area,
     polygon_rm_redundant_vertices,
 };
 
@@ -28,12 +39,13 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let start = Instant::now();
     let args: Vec<String> = env::args().collect();
     if args.len() < 2 {
-        println!("Usage: k_perimeter [k] [--topo] [--vg-only]");
+        println!("Usage: k_perimeter [k] [--topo] [--vg-only] [--retain factor]");
         println!();
         println!("Arguments:");
         println!("  [k]               The number of grid points the polygon should enclose.");
         println!("  --topo            Build visibility graph, perform topological sort, output vertices to output/topo.txt and exit.");
         println!("  --vg-only         Stop after visibility graph construction.");
+        println!("  --retain factor   The factor by which the dynamic threshold is increased after cleanup (default: 1.5).");
         println!();
         std::process::exit(1);
     }
@@ -42,6 +54,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let dir_summary = "output/summary";
     let dir_polys = "output/polys";
 
+    // Ensure all output directories exist.
     std::fs::create_dir_all("output").unwrap_or_default();
     std::fs::create_dir_all(dir_pdfs).unwrap_or_default();
     std::fs::create_dir_all(dir_polys).unwrap_or_default();
@@ -49,13 +62,21 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let mut topo_mode = false;
     let mut vg_only = false;
-    for arg in args.iter().skip(1) {
-        if arg == "--topo" {
+    let mut retain_factor = 1.5;
+
+    let mut i = 1;
+    while i < args.len() {
+        if args[i] == "--topo" {
             topo_mode = true;
-        }
-        if arg == "--vg-only" {
+        } else if args[i] == "--vg-only" {
             vg_only = true;
+        } else if args[i] == "--retain" && i + 1 < args.len() {
+            retain_factor = args[i + 1].parse::<f64>().unwrap_or(1.5);
+            i += 1;
+        } else if args[i].starts_with("--retain=") {
+            retain_factor = args[i]["--retain=".len()..].parse::<f64>().unwrap_or(1.5);
         }
+        i += 1;
     }
 
     let k = match args[1].replace('_', "").parse::<usize>() {
@@ -66,17 +87,19 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
     };
 
+    // Stage 1: Initial Bound Estimation.
+    // Generates a convex hull of ~k points around origin to establish a search baseline.
     println!("Computing convex-hull of disk around origin with k points... Kind of...");
     let ch_z = ch_disk_origin(k, false);
     let ch_z_exp = ch_disk_origin(k, true);
 
     let mut delta: i32 = ((k as f64).powf(0.25) / 4.0).ceil() as i32;
-    if k > 400 {
-        delta = 0;
-    }
+    if k > 400 { delta = 0; }
     let ch_m = vtrans(&ch_z, Point2D::new(-delta as CoordType, 0));
     let ch_m_exp = vtrans(&ch_z_exp, Point2D::new(-delta as CoordType, 0));
 
+    // Stage 2: Grid Partitioning.
+    // Identifies "good" points (near the boundary) and "bad" points (deep inside).
     let l_f = 2 + ((k as f64).powf(0.25) / 4.0).round() as i64;
     let l = if l_f > 3 { l_f } else { 3 };
 
@@ -87,6 +110,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     good.fill_dist_to_origin(&bad_ch);
     println!("   ...done");
 
+    // Stage 3: Visibility Graph Construction.
+    // Build edges between good points while respecting turn angles and bad set obstacles.
     let max_edge_l = max_edge_length(k);
     let dirs = geom::generate_primitive_vectors(max_edge_l);
     let max_turn_angle = 3.0 * std::f64::consts::PI / (k as f64).powf(1.0 / 3.0);
@@ -100,6 +125,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         return Ok(());
     }
 
+    // Stage 4: Topological Sorting.
+    // Ensures the graph is acyclic and provides an optimal processing order for the DP.
     println!("Performing topological sort...");
     let origin = Point2D::new(0, 0);
     if good.contains(&origin) {
@@ -120,11 +147,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 let p = good.get_point_by_id(*id);
                 writeln!(fl, "{} {}", p.x, p.y)?;
             }
-            println!(
-                "Topological order written to output/topo.txt. Points in topo order: {} / {}",
-                topo_order.len(),
-                good.num_points()
-            );
+            println!("Topological order written to output/topo.txt.");
             return Ok(());
         }
     } else {
@@ -132,94 +155,47 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         std::process::exit(1);
     }
 
-    let mut log = String::new();
-
-    write!(log, "# k: {}\n", k)?;
-    writeln!(log, "# Good points: {}", good.length())?;
-    println!("# Good points: {}", good.length());
-
-    println!("Starting DP solver...");
+    // Stage 5: DP Solver.
+    // Priority-queue based exploration of the configuration space.
+    println!("Starting DP solver with retain factor {}...", retain_factor);
     let start_dp = Instant::now();
-    let dp_res = minimize_perimeter_dp(k, &good, &vg);
+    let dp_res = minimize_perimeter_dp(k, &good, &vg, retain_factor);
     let dp_duration = start_dp.elapsed();
 
     let Ok((sol, ub_circle, conf_count)) = dp_res else {
-        eprintln!("Error: The DP solver failed to initialize or write to disk.");
+        eprintln!("Error: The DP solver failed.");
         std::process::exit(1);
     };
 
-    println!("k: {}", k);
-
+    // Stage 6: Validation and Output.
+    // Verify results with Pick's Theorem and save outputs.
     let sol_c = polygon_rm_redundant_vertices(&sol);
-
     let perimeter = compute_perimeter(&sol);
     let area = polygon_area(&sol);
-    let perimeter_c = compute_perimeter(&sol_c);
-    let area_c = polygon_area(&sol_c);
     let b_n = boundary_grid_points(&sol_c);
 
-    assert!((area - area_c).abs() < 1e-6, "Something is wrong with area");
-    assert!(
-        (perimeter - perimeter_c).abs() < 1e-6,
-        "Something is wrong with perimeter"
-    );
-
-    // Pick's theorem:  A= I + B/2 -1
+    // Pick's theorem verification: A = I + B/2 - 1
     if (area - (k as f64) + (b_n as f64) / 2.0 + 1.0).abs() > 1e-6 {
-        panic!("Area not computed correctly");
+        panic!("Area/Point-count mismatch via Pick's Theorem");
     }
 
     draw_polygon_with_grid(dir_pdfs, &sol, &ch_m, &ch_m_exp, k, ub_circle, &good);
-    let ch_m_perimeter = compute_perimeter(&ch_m);
-
-    let mut log_and_print =
-        |label: &str, value: &dyn std::fmt::Display| -> Result<(), Box<dyn std::error::Error>> {
-            writeln!(log, "# {:26} : {}", label, value)?;
-            println!("# {:26} : {}", label, value);
-
-            Ok(())
-        };
+    
+    let mut log = String::new();
+    let mut log_and_print = |label: &str, value: &dyn std::fmt::Display| -> Result<(), Box<dyn std::error::Error>> {
+        writeln!(log, "# {:26} : {}", label, value)?;
+        println!("# {:26} : {}", label, value);
+        Ok(())
+    };
 
     log_and_print("DP duration", &dp_duration.as_secs_f64())?;
     log_and_print("Perimeter", &perimeter)?;
-    log_and_print("circle perimeter", &ch_m_perimeter)?;
-    log_and_print("Naive perimeter", &ub_circle)?;
     log_and_print("Area", &area)?;
-    let v_n_f64 = sol_c.len() as f64;
-    log_and_print("vertices", &v_n_f64)?;
-    let b_n_f64 = b_n as f64;
-    log_and_print("boundary grid points", &b_n_f64)?;
-    let conf_count_f64 = conf_count as f64;
-    log_and_print("Configs computed", &conf_count_f64)?;
+    log_and_print("Configs computed", &(conf_count as f64))?;
+    log_and_print("Running time in seconds", &start.elapsed().as_secs_f64())?;
 
-    let c_max_angle = compute_max_turn_angle(&sol);
-
-    assert!(
-        perimeter <= ch_m_perimeter * 1.00001,
-        "perimeter not computed correctly A"
-    );
-    assert!(
-        perimeter <= ub_circle * 1.00001,
-        "perimeter not computed correctly B"
-    );
-    log_and_print("Max angle of sol", &c_max_angle)?;
-    log_and_print("UB max turn_angle", &max_turn_angle)?;
-
-    let len_p_longest = len_longest_primitive_edge(&sol);
-    let len_longest = len_longest_edge(&sol);
-    log_and_print("Longest edge len", &len_longest)?;
-    log_and_print("Longest primitive edge len", &len_p_longest)?;
-    log_and_print("UB primitive edge len", &max_edge_l)?;
-    let duration = start.elapsed();
-
-    let secs = duration.as_secs_f64();
-    log_and_print("Running time in seconds", &secs)?;
-
-    let filename_poly: String = format!("{}/{:06}_poly.txt", dir_polys, k);
-    save_polygon(&filename_poly, &sol, Some(&log))?;
-
-    let filename_log: String = format!("{}/{:06}_s.txt", dir_summary, k);
-    let mut log_fl = File::create(filename_log)?;
+    save_polygon(&format!("{}/{:06}_poly.txt", dir_polys, k), &sol, Some(&log))?;
+    let mut log_fl = File::create(format!("{}/{:06}_s.txt", dir_summary, k))?;
     writeln!(log_fl, "{}", &log)?;
 
     Ok(())

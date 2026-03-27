@@ -1,12 +1,16 @@
+//! 2D point structures and basic vector operations.
+//!
+//! Provides `Point2D` for integer coordinates (i16) and `Point2DF` for 
+//! floating-point coordinates (f64), along with operator overloads.
+
 use bytemuck::AnyBitPattern;
+use std::ops::{Add, Div, Mul, Sub};
 
-use std::{
-    //cmp::{max, min},
-    ops::{Add, Div, Mul, Sub},
-};
-
+/// Integer coordinate type. i16 is used to keep the `Point2D` struct small (4 bytes).
 pub type CoordType = i16;
 
+/// A 2D point with integer coordinates.
+/// `#[repr(C)]` and `AnyBitPattern` allow for efficient storage in memory-mapped files.
 #[repr(C)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord, AnyBitPattern)]
 pub struct Point2D {
@@ -23,10 +27,12 @@ impl Point2D {
         self.x == 0 && self.y == 0
     }
 
+    /// Squared Euclidean norm (distance from origin squared).
     pub fn norm_sq(&self) -> i64 {
         ((self.x as i64 * self.x as i64) + (self.y as i64 * self.y as i64)) as i64
     }
 
+    /// Euclidean norm (distance from origin).
     pub fn norm(&self) -> f64 {
         (self.norm_sq() as f64).sqrt()
     }
@@ -62,10 +68,12 @@ impl Div<i32> for Point2D {
     }
 }
 
+/// 2D Dot product of two integer vectors.
 pub fn dot(a: &Point2D, b: &Point2D) -> i64 {
     a.x as i64 * b.x as i64 + a.y as i64 * b.y as i64
 }
 
+/// A 2D point with floating-point coordinates.
 #[derive(Debug, Clone, Copy, PartialEq, PartialOrd)]
 pub struct Point2DF {
     pub x: f64,

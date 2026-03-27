@@ -1,6 +1,11 @@
 // dp.rs
+//! This module implements the Dynamic Programming (DP) solver for the k-perimeter problem.
+//! It uses a priority queue to explore configurations in a topological order,
+//! ensuring that we find the minimum perimeter for exactly k points.
+//!
+//! Large state spaces are handled using memory-mapped files via `mmap_vec`.
+
 use crate::point::*;
-#[warn(unused_imports)]
 use bytemuck::AnyBitPattern;
 use std::cmp::max;
 
@@ -41,6 +46,9 @@ impl Ord for DPStateKey {
 
 /// Value stored for each DP state.
 /// Tracks the optimal perimeter and the path for reconstruction.
+///
+/// This struct is stored in a memory-mapped file, so it must be `#[repr(C)]`
+/// and implement `AnyBitPattern` for zero-copy I/O.
 #[repr(C)]
 #[derive(Debug, Clone, Copy, PartialEq, PartialOrd, AnyBitPattern)]
 pub struct DPStateValue {
@@ -49,14 +57,18 @@ pub struct DPStateValue {
     /// Minimum perimeter found to reach this configuration.
     pub perimeter_so_far: f64,
     /// Index of the previous state in the `dp_vals` vector for solution reconstruction.
+    /// This allows us to trace back the vertices of the optimal polygon.
     pub prev_idx: u32,
-    /// Index in the adjacency list of the current point where valid outgoing edges start.
+    /// Optimization: Index in the adjacency list of the current point where valid outgoing edges start.
     pub next_edge_start_idx: u32,
-    /// Index in the adjacency list of the current point where valid outgoing edges end (exclusive).
+    /// Optimization: Index in the adjacency list of the current point where valid outgoing edges end (exclusive).
     pub next_edge_end_idx: u32,
 }
 
 /// Reconstructs the polygon vertices by following the `prev_idx` pointers.
+///
+/// Starting from the best complete solution, it jumps back through the `dp_vals`
+/// vector until it reaches the origin (where `prev_idx` points to itself).
 pub fn extract_solution(
     dp_vals: &MmapVec<DPStateValue>,
     best_sol_idx: u32,
@@ -77,43 +89,31 @@ pub fn extract_solution(
     out
 }
 
-// Wrapper for f64 to implement Ord
-#[derive(Debug, Clone, Copy, PartialEq)]
-pub struct OrderedFloat(pub f64);
-
-impl Eq for OrderedFloat {}
-
-impl PartialOrd for OrderedFloat {
-    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
-        Some(self.cmp(other))
-    }
-}
-
-impl Ord for OrderedFloat {
-    fn cmp(&self, other: &Self) -> Ordering {
-        self.0.total_cmp(&other.0)
-    }
-}
-
 /// Item stored in the priority queue.
+///
+/// The `key` is the `Reverse(topo_idx)`, which ensures that the `BinaryHeap`
+/// (which is a max-heap) behaves as a min-heap for the topological index.
+/// This processes points in a strict topological order.
 #[derive(Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub struct QueueItem {
-    /// Sorting key: (Reverse(topo_idx), Reverse(perimeter), Reverse(idx))
-    pub key: (std::cmp::Reverse<u32>, std::cmp::Reverse<OrderedFloat>, std::cmp::Reverse<usize>),
-    /// Index into the `dp_vals` vector.
+    /// Sorting key: Reverse(topo_idx). Smaller topo indices are popped first.
+    pub key: std::cmp::Reverse<u32>,
+    /// Index into the `dp_vals` vector where the full state details are stored.
     pub idx: usize,
     /// Location ID of the current point.
     pub loc_id: u32,
 }
 
 /// Context passed around during the DP execution.
+///
+/// Encapsulates all shared state to avoid passing multiple mutable references.
 pub struct DPContext<'a> {
     /// Total number of configurations explored.
     pub conf_count: &'a mut i64,
     /// Hash table for deduplication: maps (loc_id, n_g) to an index in `dp_vals`.
     /// Uses a packed u64 key (loc_id << 32 | n_g) for performance.
     pub d_all: &'a mut FxHashMap<u64, u32>,
-    /// Persistent storage for DP values, potentially backed by a memory-mapped file.
+    /// Persistent storage for DP values, backed by a memory-mapped file for large k.
     pub dp_vals: &'a mut MmapVec<DPStateValue>,
     /// Priority queue of configurations to explore.
     pub pq: &'a mut BinaryHeap<QueueItem>,
@@ -125,13 +125,15 @@ pub struct DPContext<'a> {
     pub k: usize,
     /// The set of valid grid points.
     pub good: &'a GridSet,
-    /// Bitmask for periodic status updates.
+    /// Bitmask for periodic status updates (e.g., print info every 2^19 configs).
     pub mask: u32,
     /// The visibility graph precalculated for the grid points.
     pub vg: &'a VisibilityGraph,
+    /// The factor by which the dynamic threshold is increased after cleanup.
+    pub retain_factor: f64,
 }
 
-/// Prints current progress of the DP solver.
+/// Prints current progress of the DP solver, including memory usage of mmap storage.
 fn print_info(ctx: &DPContext, n_g: u32) {
     let used_bytes = ctx.dp_vals.len() * std::mem::size_of::<DPStateValue>();
     let cap_bytes = ctx.dp_vals.capacity() * std::mem::size_of::<DPStateValue>();
@@ -153,118 +155,137 @@ fn make_key(loc_id: u32, n_g: u32) -> u64 {
     ((loc_id as u64) << 32) | (n_g as u64)
 }
 
-/// Processes a single configuration by attempting to extend it with all visible neighbors.
-fn process_configuration(ctx: &mut DPContext, cfg_idx: usize) {
-    *ctx.conf_count += 1;
-
-    let (cfg, perimeter_so_far, start_idx, end_idx) = {
-        let val = &ctx.dp_vals[cfg_idx];
-        (
-            val.cfg,
-            val.perimeter_so_far,
-            val.next_edge_start_idx as usize,
-            val.next_edge_end_idx as usize,
-        )
-    };
-
-    if *ctx.conf_count & (ctx.mask as i64) == 0 {
-        print_info(ctx, cfg.n_g);
+/// Processes a set of configurations with the same loc_id by attempting to extend them with all visible neighbors.
+///
+/// Optimization: All ids in the slice share the same `loc_id`. We fetch the neighbor list once.
+/// Optimization: The ids are sorted by their index in `dp_vals` to improve cache locality during sequential reads.
+fn process_configurations(ctx: &mut DPContext, mut ids: Vec<usize>) {
+    if ids.is_empty() {
+        return;
     }
 
-    // Neighbors are pre-calculated in the visibility graph.
-    let nbrs = &ctx.vg.adjacency_list[cfg.loc_id as usize];
+    // Sort by cfg_idx to improve memory locality when accessing ctx.dp_vals.
+    // Sequential access is critical for memory-mapped storage performance.
+    ids.sort_unstable();
 
-    for edge in nbrs[start_idx..end_idx].iter() {
-        let next_n_g = cfg.n_g + edge.n_g_delta;
-        // Optimization: early exit if too many grid points are enclosed.
-        if next_n_g as usize > ctx.k {
-            continue;
+    // Since all ids share the same loc_id, we fetch neighbors once from the adjacency list.
+    let loc_id = ctx.dp_vals[ids[0]].cfg.loc_id as usize;
+    let nbrs = &ctx.vg.adjacency_list[loc_id];
+
+    for cfg_idx in ids {
+        *ctx.conf_count += 1;
+
+        let (cfg, perimeter_so_far, start_idx, end_idx) = {
+            let val = &ctx.dp_vals[cfg_idx];
+            (
+                val.cfg,
+                val.perimeter_so_far,
+                val.next_edge_start_idx as usize,
+                val.next_edge_end_idx as usize,
+            )
+        };
+
+        if *ctx.conf_count & (ctx.mask as i64) == 0 {
+            print_info(ctx, cfg.n_g);
         }
-        if (next_n_g + edge.max_addion_g) < (ctx.k as u32) {
-            continue;
-        }
 
-        let next_perim = perimeter_so_far + edge.edge_len;
-        // Pruning: skip if the current path already exceeds the global best perimeter.
-        if next_perim > *ctx.opt_perim {
-            continue;
-        }
+        // Explore outgoing edges (pre-filtered by turn angle and convexity).
+        for edge in nbrs[start_idx..end_idx].iter() {
+            let next_n_g = cfg.n_g + edge.n_g_delta;
 
-        // Admissibility heuristic: total_perim = perimeter so far + min distance back to origin.
-        let total_perim = next_perim + edge.target_dto;
-        if total_perim > *ctx.opt_perim {
-            continue;
-        }
-
-        let key = make_key(edge.target_id as u32, next_n_g);
-        let mut f_queued = false;
-        let mut existing_val_idx = u32::MAX;
-
-        // Deduplication: check if this (location, n_g) state was already reached with a better perimeter.
-        if let Some(&idx) = ctx.d_all.get(&key) {
-            existing_val_idx = idx;
-            f_queued = true;
-            if ctx.dp_vals[idx as usize].perimeter_so_far <= next_perim {
+            // Early pruning: don't exceed target k.
+            if next_n_g as usize > ctx.k {
                 continue;
             }
-        }
+            // Early pruning: ensure we can still reach k from here.
+            if (next_n_g + edge.max_addion_g) < (ctx.k as u32) {
+                continue;
+            }
 
-        let next_cfg = DPStateKey {
-            loc_id: edge.target_id as u32,
-            n_g: next_n_g,
-        };
+            let next_perim = perimeter_so_far + edge.edge_len;
+            // Pruning: skip if the current path already exceeds the global best perimeter.
+            if next_perim > *ctx.opt_perim {
+                continue;
+            }
 
-        let next_val = DPStateValue {
-            cfg: next_cfg,
-            perimeter_so_far: next_perim,
-            prev_idx: cfg_idx as u32,
-            next_edge_start_idx: edge.next_edge_start_idx,
-            next_edge_end_idx: edge.next_edge_end_idx,
-        };
+            // Admissibility heuristic: total_perim = perimeter so far + min distance back to origin.
+            let total_perim = next_perim + edge.target_dto;
+            if total_perim > *ctx.opt_perim {
+                continue;
+            }
 
-        let push_idx;
-        if existing_val_idx != u32::MAX {
-            // Update the existing state with the new, better perimeter.
-            ctx.dp_vals[existing_val_idx as usize] = next_val;
-            push_idx = existing_val_idx as usize;
-        } else {
-            // Register a newly discovered state.
-            push_idx = ctx.dp_vals.len();
-            ctx.dp_vals.push(next_val).expect("push failed");
-            ctx.d_all.insert(key, push_idx as u32);
-        }
+            let key = make_key(edge.target_id as u32, next_n_g);
+            let mut f_queued = false;
+            let mut existing_val_idx = u32::MAX;
 
-        // Add to priority queue only if it's a new state or not currently queued.
-        if !f_queued {
-            ctx.pq.push(QueueItem {
-                key: (
-                    std::cmp::Reverse(ctx.good.get_topo_idx(edge.target_id)),
-                    std::cmp::Reverse(OrderedFloat(next_perim)),
-                    std::cmp::Reverse(push_idx),
-                ),
-                idx: push_idx,
+            // Deduplication: check if this (location, n_g) state was already reached with a better perimeter.
+            if let Some(&idx) = ctx.d_all.get(&key) {
+                existing_val_idx = idx;
+                f_queued = true;
+                if ctx.dp_vals[idx as usize].perimeter_so_far <= next_perim {
+                    continue;
+                }
+            }
+
+            let next_cfg = DPStateKey {
                 loc_id: edge.target_id as u32,
-            });
-        }
+                n_g: next_n_g,
+            };
 
-        // If we've enclosed exactly k points, check if we've found a new global optimum.
-        if next_n_g as usize == ctx.k {
-            if total_perim < *ctx.opt_perim {
-                *ctx.opt_perim = total_perim;
-                *ctx.best_sol_idx = push_idx as u32;
+            let next_val = DPStateValue {
+                cfg: next_cfg,
+                perimeter_so_far: next_perim,
+                prev_idx: cfg_idx as u32,
+                next_edge_start_idx: edge.next_edge_start_idx,
+                next_edge_end_idx: edge.next_edge_end_idx,
+            };
+
+            let push_idx;
+            if existing_val_idx != u32::MAX {
+                // Update the existing state with the new, better perimeter.
+                ctx.dp_vals[existing_val_idx as usize] = next_val;
+                push_idx = existing_val_idx as usize;
+            } else {
+                // Register a newly discovered state.
+                push_idx = ctx.dp_vals.len();
+                ctx.dp_vals.push(next_val).expect("push failed");
+                ctx.d_all.insert(key, push_idx as u32);
+            }
+
+            // Add to priority queue only if it's a new state or not currently queued.
+            if !f_queued {
+                ctx.pq.push(QueueItem {
+                    key: std::cmp::Reverse(ctx.good.get_topo_idx(edge.target_id)),
+                    idx: push_idx,
+                    loc_id: edge.target_id as u32,
+                });
+            }
+
+            // If we've enclosed exactly k points, check if we've found a new global optimum.
+            if next_n_g as usize == ctx.k {
+                if total_perim < *ctx.opt_perim {
+                    *ctx.opt_perim = total_perim;
+                    *ctx.best_sol_idx = push_idx as u32;
+                }
             }
         }
     }
 }
 
+/// Heuristic for the maximum allowed length of a single polygon segment based on k.
 pub fn max_edge_length(k: usize) -> u32 {
     ((k as f64).powf(1.0 / 3.0) / 2.0).round() as u32 + 2
 }
 
+/// Entry point for the DP solver.
+///
+/// Finds the minimum perimeter polygon enclosing exactly k grid points.
+/// Returns the vertices, the naive perimeter upper bound, and the total configuration count.
 pub fn minimize_perimeter_dp(
     k: usize,
     good: &GridSet,
     vg: &VisibilityGraph,
+    retain_factor: f64,
 ) -> anyhow::Result<(Vec<Point2D>, f64, i64)> {
     let sqrt_k = (k as f64).sqrt().ceil() as u32 + 1;
     let ub_circle = 2.0 * (std::f64::consts::PI * (k as f64)).sqrt();
@@ -272,8 +293,10 @@ pub fn minimize_perimeter_dp(
     let power = 19;
     let mask = (1 << power) - 1;
 
+    // Start with a naive upper bound on the perimeter.
     let mut opt_perim = ub_circle.min(sq_perim);
 
+    // Initial state: origin (0,0) which encloses 1 point by definition.
     let start_loc_id = good.get_point_id(Point2D::new(0, 0));
     let start_key = DPStateKey {
         loc_id: start_loc_id as u32,
@@ -284,15 +307,12 @@ pub fn minimize_perimeter_dp(
 
     let mut pq = BinaryHeap::new();
     pq.push(QueueItem {
-        key: (
-            std::cmp::Reverse(good.get_topo_idx(start_loc_id)),
-            std::cmp::Reverse(OrderedFloat(0.0)),
-            std::cmp::Reverse(0),
-        ),
+        key: std::cmp::Reverse(good.get_topo_idx(start_loc_id)),
         idx: 0,
         loc_id: start_loc_id as u32,
     });
 
+    // Estimate total capacity for the mmap vector.
     let hint_size = if k > 100000 {
         100_000_000
     } else {
@@ -304,6 +324,7 @@ pub fn minimize_perimeter_dp(
     d_all.reserve(std::cmp::min(threshold, 1_000_000));
     d_all.insert(make_key(start_loc_id as u32, 1), 0);
 
+    // MmapVec automatically uses a temporary file on disk if the capacity is large.
     let mut dp_vals = MmapVec::<DPStateValue>::with_capacity(hint_size)?;
 
     let start_val = DPStateValue {
@@ -327,8 +348,10 @@ pub fn minimize_perimeter_dp(
         good,
         mask,
         vg,
+        retain_factor,
     };
 
+    // Main DP loop.
     loop {
         let item = ctx.pq.pop();
         if item.is_none() {
@@ -340,6 +363,8 @@ pub fn minimize_perimeter_dp(
             ..
         } = item.unwrap();
 
+        // Group together all items in the queue that have the same loc_id.
+        // Since we sort by topo_idx, all items with the same loc_id are adjacent in the queue.
         let mut ids = vec![popped_idx];
         while let Some(next_item) = ctx.pq.peek() {
             if next_item.loc_id == popped_loc_id {
@@ -351,18 +376,20 @@ pub fn minimize_perimeter_dp(
             }
         }
 
+        // Periodic pruning of the deduplication map.
+        // We can safely remove any state with a topo_idx smaller than the current one,
+        // because in a DAG, those states can never be improved or reached again.
         if ctx.d_all.len() > threshold {
             let min_topo_idx = ctx.good.get_topo_idx(popped_loc_id as usize);
             ctx.d_all.retain(|&key, _| {
                 let loc_id = (key >> 32) as u32;
                 ctx.good.get_topo_idx(loc_id as usize) >= min_topo_idx
             });
-            threshold = max(threshold, 3 * ctx.d_all.len() / 2);
+            threshold = max(threshold, (ctx.retain_factor * ctx.d_all.len() as f64) as usize);
         }
 
-        for id in ids {
-            process_configuration(&mut ctx, id);
-        }
+        // Process the grouped configurations as a single batch.
+        process_configurations(&mut ctx, ids);
     }
 
     println!("# of configurations generated: {}", *ctx.conf_count);
