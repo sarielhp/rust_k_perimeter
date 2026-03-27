@@ -31,8 +31,8 @@ use std::io::Write;
 use std::time::Instant;
 
 use crate::geom::{
-    boundary_grid_points, polygon_area,
-    polygon_rm_redundant_vertices,
+    boundary_grid_points, compute_max_turn_angle, len_longest_edge, len_longest_primitive_edge,
+    polygon_area, polygon_rm_redundant_vertices,
 };
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -62,7 +62,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let mut topo_mode = false;
     let mut vg_only = false;
-    let mut retain_factor = 1.5;
+    let mut retain_factor = 1.1;
 
     let mut i = 1;
     while i < args.len() {
@@ -173,6 +173,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let perimeter = compute_perimeter(&sol);
     let area = polygon_area(&sol);
     let b_n = boundary_grid_points(&sol_c);
+    let v_n = sol_c.len();
 
     // Pick's theorem verification: A = I + B/2 - 1
     if (area - (k as f64) + (b_n as f64) / 2.0 + 1.0).abs() > 1e-6 {
@@ -180,18 +181,34 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     }
 
     draw_polygon_with_grid(dir_pdfs, &sol, &ch_m, &ch_m_exp, k, ub_circle, &good);
-    
+    let ch_m_perimeter = compute_perimeter(&ch_m);
+
     let mut log = String::new();
-    let mut log_and_print = |label: &str, value: &dyn std::fmt::Display| -> Result<(), Box<dyn std::error::Error>> {
-        writeln!(log, "# {:26} : {}", label, value)?;
-        println!("# {:26} : {}", label, value);
-        Ok(())
-    };
+    let mut log_and_print =
+        |label: &str, value: &dyn std::fmt::Display| -> Result<(), Box<dyn std::error::Error>> {
+            writeln!(log, "# {:26} : {}", label, value)?;
+            println!("# {:26} : {}", label, value);
+            Ok(())
+        };
 
     log_and_print("DP duration", &dp_duration.as_secs_f64())?;
     log_and_print("Perimeter", &perimeter)?;
+    log_and_print("circle perimeter", &ch_m_perimeter)?;
+    log_and_print("Naive perimeter", &ub_circle)?;
     log_and_print("Area", &area)?;
+    log_and_print("vertices", &(v_n as f64))?;
+    log_and_print("boundary grid points", &(b_n as f64))?;
     log_and_print("Configs computed", &(conf_count as f64))?;
+
+    let c_max_angle = compute_max_turn_angle(&sol);
+    log_and_print("Max angle of sol", &c_max_angle)?;
+    log_and_print("UB max turn_angle", &max_turn_angle)?;
+
+    let len_p_longest = len_longest_primitive_edge(&sol);
+    let len_longest = len_longest_edge(&sol);
+    log_and_print("Longest edge len", &len_longest)?;
+    log_and_print("Longest primitive edge len", &len_p_longest)?;
+    log_and_print("UB primitive edge len", &max_edge_l)?;
     log_and_print("Running time in seconds", &start.elapsed().as_secs_f64())?;
 
     save_polygon(&format!("{}/{:06}_poly.txt", dir_polys, k), &sol, Some(&log))?;
