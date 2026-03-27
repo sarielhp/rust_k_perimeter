@@ -30,10 +30,14 @@ fn cr_string_pdf(cr: &Context, w: f64, h: f64, text_content: &str) {
 
 /// Helper to draw a filled and outlined polygon.
 fn draw_polygon(cr: &Context, poly: &[(f64, f64)], rgba: (f64, f64, f64, f64)) {
-    if poly.is_empty() { return; }
+    if poly.is_empty() {
+        return;
+    }
     let pt = poly[0];
     cr.move_to(pt.0, pt.1);
-    for i in 1..poly.len() { cr.line_to(poly[i].0, poly[i].1); }
+    for i in 1..poly.len() {
+        cr.line_to(poly[i].0, poly[i].1);
+    }
     cr.close_path();
     cr.stroke_preserve().unwrap();
     cr.set_source_rgba(rgba.0, rgba.1, rgba.2, rgba.3);
@@ -78,7 +82,8 @@ pub fn draw_polygon_with_grid(
 
     let trans_poly: Vec<(f64, f64)> = poly.iter().map(|&p| translate(p)).collect();
     let trans_poly_circ: Vec<(f64, f64)> = poly_circ.iter().map(|&p| translate(p)).collect();
-    let trans_poly_circ_exp: Vec<(f64, f64)> = poly_circ_exp.iter().map(|&p| translate(p)).collect();
+    let trans_poly_circ_exp: Vec<(f64, f64)> =
+        poly_circ_exp.iter().map(|&p| translate(p)).collect();
 
     // Draw the optimal polygon.
     cr.set_line_width(2.0);
@@ -92,17 +97,26 @@ pub fn draw_polygon_with_grid(
     cr.set_source_rgb(0.1, 1.0, 0.1);
     draw_polygon(&cr, &trans_poly_circ_exp, (0.1, 0.9, 0.1, 0.1));
 
+    let rad: f64 = width / (20.0 * (max_x as f64));
     // Draw the grid points, color-coded by their status (origin, good, bad).
     for x in min_x..=max_x {
         for y in min_y..=max_y {
             let p = Point2D::new(x as CoordType, y as CoordType);
             let (tx, ty) = translate(p);
 
-            if x == 0 && y == 0 { cr.set_source_rgb(1.0, 1.0, 0.0); } // Origin
-            else if good.contains(&p) { cr.set_source_rgb(0.0, 0.0, 1.0); } // Search set
-            else { cr.set_source_rgb(0.8, 0.0, 0.0); } // Interior/Exterior
+            if x == 0 && y == 0 {
+                cr.set_source_rgb(1.0, 1.0, 0.0);
+            }
+            // Origin
+            else if good.contains(&p) {
+                cr.set_source_rgb(0.0, 0.0, 1.0);
+            }
+            // Search set
+            else {
+                cr.set_source_rgb(0.8, 0.0, 0.0);
+            } // Interior/Exterior
 
-            cr.arc(tx, ty, 1.0, 0.0, 2.0 * std::f64::consts::PI);
+            cr.arc(tx, ty, rad, 0.0, 2.0 * std::f64::consts::PI);
             cr.fill().unwrap();
         }
     }
@@ -110,7 +124,11 @@ pub fn draw_polygon_with_grid(
     cr.show_page().unwrap();
 
     let str_main = format!("k = {}\nCircle ub on perimeter: {:.4}\n", k, ub_circle);
-    let str_b = format!("solution perimeter: {:.4}\n# vertices: {}\n", compute_perimeter(poly), poly.len());
+    let str_b = format!(
+        "solution perimeter: {:.4}\n# vertices: {}\n",
+        compute_perimeter(poly),
+        poly.len()
+    );
     cr_string_pdf(&cr, width, height, &format!("{}{}", str_main, str_b));
 
     surface.finish();
