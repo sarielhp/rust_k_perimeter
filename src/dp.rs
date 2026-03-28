@@ -131,21 +131,21 @@ pub struct DPContext<'a> {
     pub vg: &'a VisibilityGraph,
     /// The factor by which the dynamic threshold is increased after cleanup.
     pub retain_factor: f64,
+    pub start_dp: std::time::Instant,
 }
 
 /// Prints current progress of the DP solver, including memory usage of mmap storage.
-fn print_info(ctx: &DPContext, n_g: u32) {
+fn print_info(ctx: &DPContext, l_i: u32) {
     let used_bytes = ctx.dp_vals.len() * std::mem::size_of::<DPStateValue>();
-    let cap_bytes = ctx.dp_vals.capacity() * std::mem::size_of::<DPStateValue>();
     let used_mb = used_bytes / 1_048_576;
-    let cap_mb = cap_bytes / 1_048_576;
     println!(
-        "c: {}  n_g: {}  dp_vals (u/t): {} MB / {} MB  d_all: {}",
+        "k: {} c: {:>12}  {:3}%  dpA: {:>6}MB  hash: {}  {:.2}s",
+        ctx.k,
         (*ctx.conf_count).to_formatted_string(&Locale::en),
-        n_g,
+        (ctx.good.get_topo_idx(l_i as usize) as f64 / ctx.good.num_points() as f64 * 100.0).round(),
         used_mb.to_formatted_string(&Locale::en),
-        cap_mb.to_formatted_string(&Locale::en),
-        ctx.d_all.len().to_formatted_string(&Locale::en)
+        ctx.d_all.len().to_formatted_string(&Locale::en),
+        ctx.start_dp.elapsed().as_secs_f64()
     );
 }
 
@@ -184,10 +184,6 @@ fn process_configurations(ctx: &mut DPContext, mut ids: Vec<usize>) {
                 val.next_edge_end_idx as usize,
             )
         };
-
-        if *ctx.conf_count & (ctx.mask as i64) == 0 {
-            print_info(ctx, cfg.n_g);
-        }
 
         // Explore outgoing edges (pre-filtered by turn angle and convexity).
         for edge in nbrs[start_idx..end_idx].iter() {
@@ -274,7 +270,8 @@ fn process_configurations(ctx: &mut DPContext, mut ids: Vec<usize>) {
 
 /// Heuristic for the maximum allowed length of a single polygon segment based on k.
 pub fn max_edge_length(k: usize) -> u32 {
-    ((k as f64).powf(1.0 / 3.0) / 2.0).round() as u32 + 2
+    //    ((k as f64).powf(1.0 / 3.0) / 2.0).round() as u32 + 2
+    (5.0 + 2.0 * (k as f64).powf(1.0 / 6.0)).round() as u32 + 2
 }
 
 /// Entry point for the DP solver.
@@ -290,7 +287,7 @@ pub fn minimize_perimeter_dp(
     let sqrt_k = (k as f64).sqrt().ceil() as u32 + 1;
     let ub_circle = 2.0 * (std::f64::consts::PI * (k as f64)).sqrt();
     let sq_perim = (4 * sqrt_k + 6) as f64;
-    let power = 19;
+    let power = 20;
     let mask = (1 << power) - 1;
 
     // Start with a naive upper bound on the perimeter.
@@ -314,7 +311,7 @@ pub fn minimize_perimeter_dp(
 
     // Estimate total capacity for the mmap vector.
     let hint_size = if k > 100000 {
-        100_000_000
+        10_000_000
     } else {
         std::cmp::min(2 * k * k, 10_000_000)
     };
@@ -349,12 +346,15 @@ pub fn minimize_perimeter_dp(
         mask,
         vg,
         retain_factor,
+        start_dp: std::time::Instant::now(),
     };
 
+    let mut last_loc_popped = 0;
     // Main DP loop.
     loop {
         let item = ctx.pq.pop();
         if item.is_none() {
+            print_info(&ctx, last_loc_popped);
             break;
         }
         let QueueItem {
@@ -363,6 +363,7 @@ pub fn minimize_perimeter_dp(
             ..
         } = item.unwrap();
 
+        last_loc_popped = popped_loc_id;
         // Group together all items in the queue that have the same loc_id.
         // Since we sort by topo_idx, all items with the same loc_id are adjacent in the queue.
         let mut ids = vec![popped_idx];
@@ -385,11 +386,19 @@ pub fn minimize_perimeter_dp(
                 let loc_id = (key >> 32) as u32;
                 ctx.good.get_topo_idx(loc_id as usize) >= min_topo_idx
             });
-            threshold = max(threshold, (ctx.retain_factor * ctx.d_all.len() as f64) as usize);
+            threshold = max(
+                threshold,
+                (ctx.retain_factor * ctx.d_all.len() as f64) as usize,
+            );
         }
 
+        let old_mask = *ctx.conf_count & (ctx.mask as i64);
         // Process the grouped configurations as a single batch.
         process_configurations(&mut ctx, ids);
+
+        if *ctx.conf_count & (ctx.mask as i64) < old_mask {
+            print_info(&ctx, popped_loc_id);
+        }
     }
 
     println!("# of configurations generated: {}", *ctx.conf_count);

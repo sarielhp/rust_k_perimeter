@@ -60,7 +60,7 @@ pub fn draw_polygon_with_grid(
     good: &GridSet,
 ) {
     let filename: String = format!("{}/{:06}.pdf", dir_pdfs, k);
-    let (min_x, max_x, _, max_y) = bound(&[poly, poly_circ, poly_circ_exp], 3);
+    let (min_x, max_x, _, max_y) = bound(&[poly, poly_circ, poly_circ_exp], 10);
     let min_y = 0;
 
     let margin = 50.0;

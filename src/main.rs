@@ -20,30 +20,28 @@ mod v_graph;
 use dp::{max_edge_length, minimize_perimeter_dp};
 use draw::{compute_perimeter, draw_polygon_with_grid};
 use geom::{ch_disk_origin, compute_good_set, vtrans};
-use v_graph::build_visibility_graph;
 use point::*;
 use polygon::*;
+use v_graph::build_visibility_graph;
 
-use std::env;
-use std::fmt::Write as StrWrite;
 use std::fs::File;
 use std::io::Write;
 use std::time::Instant;
+use std::{env, fmt::Write as StrWrite};
 
 use crate::geom::{
     boundary_grid_points, compute_max_turn_angle, len_longest_edge, len_longest_primitive_edge,
-    polygon_area, polygon_rm_redundant_vertices,
+    polygon_area, polygon_boundary_distance, polygon_rm_redundant_vertices,
 };
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let start = Instant::now();
     let args: Vec<String> = env::args().collect();
     if args.len() < 2 {
-        println!("Usage: k_perimeter [k] [--topo] [--vg-only] [--retain factor]");
+        println!("Usage: k_perimeter [k] [--vg-only] [--retain factor]");
         println!();
         println!("Arguments:");
         println!("  [k]               The number of grid points the polygon should enclose.");
-        println!("  --topo            Build visibility graph, perform topological sort, output vertices to output/topo.txt and exit.");
         println!("  --vg-only         Stop after visibility graph construction.");
         println!("  --retain factor   The factor by which the dynamic threshold is increased after cleanup (default: 1.5).");
         println!();
@@ -60,15 +58,12 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     std::fs::create_dir_all(dir_polys).unwrap_or_default();
     std::fs::create_dir_all(dir_summary).unwrap_or_default();
 
-    let mut topo_mode = false;
     let mut vg_only = false;
     let mut retain_factor = 1.1;
 
     let mut i = 1;
     while i < args.len() {
-        if args[i] == "--topo" {
-            topo_mode = true;
-        } else if args[i] == "--vg-only" {
+        if args[i] == "--vg-only" {
             vg_only = true;
         } else if args[i] == "--retain" && i + 1 < args.len() {
             retain_factor = args[i + 1].parse::<f64>().unwrap_or(1.5);
@@ -94,7 +89,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let ch_z_exp = ch_disk_origin(k, true);
 
     let mut delta: i32 = ((k as f64).powf(0.25) / 4.0).ceil() as i32;
-    if k > 400 { delta = 0; }
+    if k > 400 {
+        delta = 0;
+    }
     let ch_m = vtrans(&ch_z, Point2D::new(-delta as CoordType, 0));
     let ch_m_exp = vtrans(&ch_z_exp, Point2D::new(-delta as CoordType, 0));
 
@@ -104,7 +101,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let l = if l_f > 3 { l_f } else { 3 };
 
     println!("Computing good and bad sets with width = {}...", l);
-    let (mut good, bad_ch, so_so) = compute_good_set(&ch_m_exp, l as f64);
+    let (mut good, bad_ch, so_so, bad_out) = compute_good_set(&ch_m_exp, l as f64);
 
     println!("Computing distance of good points to the origin...");
     good.fill_dist_to_origin(&bad_ch);
@@ -127,6 +124,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // Stage 4: Topological Sorting.
     // Ensures the graph is acyclic and provides an optimal processing order for the DP.
+
+    // Stage 4.a: To be on the safe side, remove any edges coming into the origin
+    // to ensure it's a source in the graph. (This is a precautionary step; the
+    // origin should ideally not be in the good set, but we handle it just in case.)
     println!("Performing topological sort...");
     let origin = Point2D::new(0, 0);
     if good.contains(&origin) {
@@ -136,28 +137,25 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
     }
 
+    // Now the sorting...
     if let Some(topo_order) = v_graph::topological_sort(&vg) {
         for (idx, &id) in topo_order.iter().enumerate() {
             good.set_topo_idx(id, idx as u32);
         }
-
-        if topo_mode {
-            let mut fl = File::create("output/topo.txt")?;
-            for id in &topo_order {
-                let p = good.get_point_by_id(*id);
-                writeln!(fl, "{} {}", p.x, p.y)?;
-            }
-            println!("Topological order written to output/topo.txt.");
-            return Ok(());
-        }
+        /*
+        println!("Vertices in topological order: {}", topo_order.len());
+        if let Some(max_val) = topo_order.iter().max() {
+            println!("Max vertex in topological order: {}", max_val);
+        }*/
     } else {
         eprintln!("Error: Visibility graph is not a DAG.");
         std::process::exit(1);
     }
+    //println!("Number good pointer: {}", good.num_points());
 
     // Stage 5: DP Solver.
     // Priority-queue based exploration of the configuration space.
-    println!("Starting DP solver with retain factor {}...", retain_factor);
+    //println!("Starting DP solver with retain factor {}...", retain_factor);
     let start_dp = Instant::now();
     let dp_res = minimize_perimeter_dp(k, &good, &vg, retain_factor);
     let dp_duration = start_dp.elapsed();
@@ -169,19 +167,41 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // Stage 6: Validation and Output.
     // Verify results with Pick's Theorem and save outputs.
+    let rt = start.elapsed().as_secs_f64();
+
     let sol_c = polygon_rm_redundant_vertices(&sol);
     let perimeter = compute_perimeter(&sol);
     let area = polygon_area(&sol);
     let b_n = boundary_grid_points(&sol_c);
     let v_n = sol_c.len();
 
-    // Pick's theorem verification: A = I + B/2 - 1
-    if (area - (k as f64) + (b_n as f64) / 2.0 + 1.0).abs() > 1e-6 {
+    // Pick's theorem verification: A = I + B/2 - 1 => A = k - B/2 - 1
+    // k = A + B/
+    let k_by_pick = area + (b_n as f64) / 2.0 + 1.0;
+    if (k as f64 - k_by_pick).abs() > 1e-3 {
+        println!("Error: Pick's Theorem verification failed.");
+        println!("Computed area        : {}", area);
+        println!("Boundary points (B)  : {}", b_n);
+        println!("k by Pick's          : {}", k_by_pick);
+        println!("k                    : {}", k);
+
         panic!("Area/Point-count mismatch via Pick's Theorem");
+    } else {
+        println!("Pick's Theorem verification passed.");
     }
 
     draw_polygon_with_grid(dir_pdfs, &sol, &ch_m, &ch_m_exp, k, ub_circle, &good);
     let ch_m_perimeter = compute_perimeter(&ch_m);
+
+    // compute the minimum distance from bad_out points to the solution polygon, to verify that the solution
+    // is not too close to bad points.
+    let mut min_bad_d: f64 = k as f64;
+    for p in &bad_out {
+        let d = polygon_boundary_distance(&sol, *p);
+        if d < min_bad_d {
+            min_bad_d = d;
+        }
+    }
 
     let mut log = String::new();
     let mut log_and_print =
@@ -191,7 +211,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             Ok(())
         };
 
-    log_and_print("DP duration", &dp_duration.as_secs_f64())?;
+    log_and_print("k", &k)?;
     log_and_print("Perimeter", &perimeter)?;
     log_and_print("circle perimeter", &ch_m_perimeter)?;
     log_and_print("Naive perimeter", &ub_circle)?;
@@ -207,11 +227,21 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let len_p_longest = len_longest_primitive_edge(&sol);
     let len_longest = len_longest_edge(&sol);
     log_and_print("Longest edge len", &len_longest)?;
+
     log_and_print("Longest primitive edge len", &len_p_longest)?;
     log_and_print("UB primitive edge len", &max_edge_l)?;
-    log_and_print("Running time in seconds", &start.elapsed().as_secs_f64())?;
+    log_and_print("DP duration", &dp_duration.as_secs_f64())?;
+    log_and_print("Running time in seconds", &rt)?;
 
-    save_polygon(&format!("{}/{:06}_poly.txt", dir_polys, k), &sol, Some(&log))?;
+    log_and_print("Min dist bad pnt to sol", &min_bad_d)?;
+
+    save_polygon(
+        &format!("{}/{:06}_poly.txt", dir_polys, k),
+        &sol,
+        Some(&log),
+    )?;
+
+    // Save summary log for this run.
     let mut log_fl = File::create(format!("{}/{:06}_s.txt", dir_summary, k))?;
     writeln!(log_fl, "{}", &log)?;
 

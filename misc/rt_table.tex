@@ -1,46 +1,25 @@
-% Add \usepackage{booktabs} to your LaTeX preamble
-  \centering
-  \small
-  \begin{tabular}[t]{rr}
-    \toprule
-    $k$ Value & Time (s) \\
-    \midrule
-    10 & 0.03 \\
-    20 & 0.02 \\
-    50 & 0.02 \\
-    100 & 0.03 \\
-    500 & 0.05 \\
-    1,000 & 0.08 \\
-    5,000 & 0.72 \\
-    10,000 & 3.61 \\
-    \bottomrule
-  \end{tabular}
-  \hfill
-  \begin{tabular}[t]{rr}
-    \toprule
-    $k$ Value & Time (s) \\
-    \midrule
-    20,000 & 10.14 \\
-    30,000 & 18.98 \\
-    40,000 & 42.61 \\
-    50,000 & 54.13 \\
-    60,000 & 73.37 \\
-    70,000 & 99.33 \\
-    80,000 & 117.15 \\
-    90,000 & 130.22 \\
-    \bottomrule
-  \end{tabular}
-  \hfill
-  \begin{tabular}[t]{rr}
-    \toprule
-    $k$ Value & Time (s) \\
-    \midrule
-    100,000 & 154.97 \\
-    150,000 & 385.86 \\
-    200,000 & 556.94 \\
-    250,000 & 947.47 \\
-    300,000 & 1,214.20 \\
-    350,000 & 1,525.66 \\
-    \bottomrule
-  \end{tabular}
-  \caption{Performance summary split into three independent parallel sections.}
+fatal: error thrown and no exception handler available.
+InterruptException()
+_jl_mutex_unlock at /cache/build/builder-amdci5-3/julialang/julia-release-1-dot-12/src/threading.c:1054
+jl_mutex_unlock at /cache/build/builder-amdci5-3/julialang/julia-release-1-dot-12/src/julia_locks.h:80 [inlined]
+jl_type_infer at /cache/build/builder-amdci5-3/julialang/julia-release-1-dot-12/src/gf.c:488
+jl_compile_method_internal at /cache/build/builder-amdci5-3/julialang/julia-release-1-dot-12/src/gf.c:3516
+_jl_invoke at /cache/build/builder-amdci5-3/julialang/julia-release-1-dot-12/src/gf.c:4006 [inlined]
+ijl_apply_generic at /cache/build/builder-amdci5-3/julialang/julia-release-1-dot-12/src/gf.c:4214
+show_exception_stack at ./errorshow.jl:1016
+display_error at ./client.jl:108
+unknown function (ip: 0x7f65a8104076) at (unknown file)
+display_error at ./client.jl:113
+jfptr_display_error_74436.1 at /home/sariel/.julia/juliaup/julia-1.12.5+0.x64.linux.gnu/lib/julia/sys.so (unknown line)
+jl_apply at /cache/build/builder-amdci5-3/julialang/julia-release-1-dot-12/src/julia.h:2391 [inlined]
+jl_f_invokelatest at /cache/build/builder-amdci5-3/julialang/julia-release-1-dot-12/src/builtins.c:881
+_start at ./client.jl:567
+jfptr__start_74358.1 at /home/sariel/.julia/juliaup/julia-1.12.5+0.x64.linux.gnu/lib/julia/sys.so (unknown line)
+jl_apply at /cache/build/builder-amdci5-3/julialang/julia-release-1-dot-12/src/julia.h:2391 [inlined]
+true_main at /cache/build/builder-amdci5-3/julialang/julia-release-1-dot-12/src/jlapi.c:971
+jl_repl_entrypoint at /cache/build/builder-amdci5-3/julialang/julia-release-1-dot-12/src/jlapi.c:1139
+main at /cache/build/builder-amdci5-3/julialang/julia-release-1-dot-12/cli/loader_exe.c:58
+unknown function (ip: 0x7f665f7d9f74) at /usr/lib/x86_64-linux-gnu/libc.so.6
+__libc_start_main at /usr/lib/x86_64-linux-gnu/libc.so.6 (unknown line)
+unknown function (ip: 0x4010b8) at /workspace/srcdir/glibc-2.17/csu/../sysdeps/x86_64/start.S
+ERROR: 

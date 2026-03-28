@@ -1,0 +1,4 @@
+#! /bin/bash
+
+scripts/do_to_10_000
+scripts/do_tests
