@@ -155,7 +155,7 @@ pub fn grid_points_inside_edge(u: Point2D, v: Point2D) -> u32 {
         return 0;
     }
     let e = u - v;
-    let t = gcd(e.x as i64, e.y as i64);
+    let t = gcd(e.x as i64, e.y as i64).abs();
     (t - 1) as u32
 }
 
@@ -397,7 +397,7 @@ pub fn is_colinear(a: Point2D, b: Point2D, c: Point2D) -> bool {
     (b.x - a.x) * (c.y - a.y) == (b.y - a.y) * (c.x - a.x)
 }
 
-fn count_distinct(a: Point2D, b: Point2D, c: Point2D) -> u32 {
+fn count_distinct(a: Point2D, b: Point2D, c: Point2D) -> u64 {
     if a == b && b == c {
         1
     } else if a == b || a == c || b == c {
@@ -418,22 +418,22 @@ pub fn triangle_count_new_points(a: Point2D, b: Point2D, c: Point2D) -> (u32, u3
         ab_g_n as u64 + bc_g_n as u64 + ac_g_n as u64 + count_distinct(a, b, c) as u64;
 
     let tri_i_new = if area2 > 0 {
-        let area_i64 = area2 as i64;
-        let boundary_i64 = boundary_n as i64;
-        let result = (area_i64 - boundary_i64 + 2) / 2;
+        //let area_i64 = area2 as i64;
+        //let boundary_i64 = boundary_n as i64;
+        let result = (area2 - boundary_n as i64 + 2) / 2;
         result as u32
     } else {
         0
     };
 
-    let tri_b_new: i32 = if a == c {
+    let tri_b_new: i64 = if a == c {
         std::process::exit(1);
     } else if a == b {
-        ac_g_n as i32 + 1
+        ac_g_n as i64 + 1
     } else if area2 == 0 {
-        bc_g_n as i32 + 1
+        bc_g_n as i64 + 1
     } else {
-        ac_g_n as i32 + bc_g_n as i32 + 1
+        ac_g_n as i64 + bc_g_n as i64 + 1
     };
 
     (tri_i_new, tri_b_new as u32)
