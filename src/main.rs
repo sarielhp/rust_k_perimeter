@@ -35,6 +35,10 @@ use crate::geom::{
 };
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
+    assert!(
+        std::mem::size_of::<usize>() >= 8,
+        "This program requires a 64-bit architecture (usize must be at least 64 bits)."
+    );
     let start = Instant::now();
     let args: Vec<String> = env::args().collect();
     if args.len() < 2 {
@@ -116,6 +120,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     println!("Building visibility graph...");
     let mut vg = build_visibility_graph(&good, &bad_ch, &so_so, &dirs, k, max_turn_angle);
+
+    if vg.num_edges() == 0 {
+        panic!("Visibility graph is empty. No valid edges found between grid points for k={}. Consider increasing the search area or checking convexity constraints.", k);
+    }
 
     if vg_only {
         println!("Stopping after visibility graph construction as requested.");

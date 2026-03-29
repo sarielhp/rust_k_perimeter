@@ -58,11 +58,7 @@ pub struct DPStateValue {
     pub perimeter_so_far: f64,
     /// Index of the previous state in the `dp_vals` vector for solution reconstruction.
     /// This allows us to trace back the vertices of the optimal polygon.
-    pub prev_idx: u32,
-    /// Optimization: Index in the adjacency list of the current point where valid outgoing edges start.
-    pub next_edge_start_idx: u32,
-    /// Optimization: Index in the adjacency list of the current point where valid outgoing edges end (exclusive).
-    pub next_edge_end_idx: u32,
+    pub prev_idx: u64,
 }
 
 /// Reconstructs the polygon vertices by following the `prev_idx` pointers.
@@ -71,11 +67,11 @@ pub struct DPStateValue {
 /// vector until it reaches the origin (where `prev_idx` points to itself).
 pub fn extract_solution(
     dp_vals: &MmapVec<DPStateValue>,
-    best_sol_idx: u32,
+    best_sol_idx: usize,
     good: &GridSet,
 ) -> Vec<Point2D> {
     let mut out = Vec::new();
-    let mut curr_idx = best_sol_idx as usize;
+    let mut curr_idx = best_sol_idx;
 
     loop {
         let val = &dp_vals[curr_idx];
@@ -112,7 +108,7 @@ pub struct DPContext<'a> {
     pub conf_count: &'a mut i64,
     /// Hash table for deduplication: maps (loc_id, n_g) to an index in `dp_vals`.
     /// Uses a packed u64 key (loc_id << 32 | n_g) for performance.
-    pub d_all: &'a mut FxHashMap<u64, u32>,
+    pub d_all: &'a mut FxHashMap<u64, u64>,
     /// Persistent storage for DP values, backed by a memory-mapped file for large k.
     pub dp_vals: &'a mut MmapVec<DPStateValue>,
     /// Priority queue of configurations to explore.
@@ -120,7 +116,7 @@ pub struct DPContext<'a> {
     /// Global upper bound on the optimal perimeter found so far.
     pub opt_perim: &'a mut f64,
     /// Index of the best complete solution found.
-    pub best_sol_idx: &'a mut i64,
+    pub best_sol_idx: &'a mut Option<usize>,
     /// Target number of grid points to enclose.
     pub k: usize,
     /// The set of valid grid points.
@@ -175,14 +171,31 @@ fn process_configurations(ctx: &mut DPContext, mut ids: Vec<usize>) {
     for cfg_idx in ids {
         *ctx.conf_count += 1;
 
-        let (cfg, perimeter_so_far, start_idx, end_idx) = {
+        let (cfg, perimeter_so_far, prev_idx) = {
             let val = &ctx.dp_vals[cfg_idx];
-            (
-                val.cfg,
-                val.perimeter_so_far,
-                val.next_edge_start_idx as usize,
-                val.next_edge_end_idx as usize,
-            )
+            (val.cfg, val.perimeter_so_far, val.prev_idx as usize)
+        };
+
+        let (start_idx, end_idx) = if prev_idx == cfg_idx {
+            // Start state
+            (0, nbrs.len())
+        } else {
+            // Find the edge that led to loc_id from prev_loc_id
+            let prev_loc_id = ctx.dp_vals[prev_idx].cfg.loc_id as usize;
+            let prev_nbrs = &ctx.vg.adjacency_list[prev_loc_id];
+
+            // Search for the edge (prev_loc_id, loc_id)
+            let mut found_range = None;
+            for edge in prev_nbrs {
+                if edge.target_id == loc_id {
+                    found_range = Some((
+                        edge.next_edge_start_idx as usize,
+                        edge.next_edge_end_idx as usize,
+                    ));
+                    break;
+                }
+            }
+            found_range.expect("Incoming edge not found in visibility graph")
         };
 
         // Explore outgoing edges (pre-filtered by turn angle and convexity).
@@ -212,13 +225,14 @@ fn process_configurations(ctx: &mut DPContext, mut ids: Vec<usize>) {
 
             let key = make_key(edge.target_id as u32, next_n_g);
             let mut f_queued = false;
-            let mut existing_val_idx = u32::MAX;
+            let mut existing_val_idx = None;
 
             // Deduplication: check if this (location, n_g) state was already reached with a better perimeter.
             if let Some(&idx) = ctx.d_all.get(&key) {
-                existing_val_idx = idx;
+                let idx_u = idx as usize;
+                existing_val_idx = Some(idx_u);
                 f_queued = true;
-                if ctx.dp_vals[idx as usize].perimeter_so_far <= next_perim {
+                if ctx.dp_vals[idx_u].perimeter_so_far <= next_perim {
                     continue;
                 }
             }
@@ -231,21 +245,21 @@ fn process_configurations(ctx: &mut DPContext, mut ids: Vec<usize>) {
             let next_val = DPStateValue {
                 cfg: next_cfg,
                 perimeter_so_far: next_perim,
-                prev_idx: cfg_idx as u32,
-                next_edge_start_idx: edge.next_edge_start_idx,
-                next_edge_end_idx: edge.next_edge_end_idx,
+                prev_idx: cfg_idx as u64,
             };
 
-            let push_idx;
-            if existing_val_idx != u32::MAX {
+            let push_idx: usize;
+            if let Some(idx_u) = existing_val_idx {
                 // Update the existing state with the new, better perimeter.
-                ctx.dp_vals[existing_val_idx as usize] = next_val;
-                push_idx = existing_val_idx as usize;
+                ctx.dp_vals[idx_u] = next_val;
+                push_idx = idx_u;
             } else {
                 // Register a newly discovered state.
                 push_idx = ctx.dp_vals.len();
-                ctx.dp_vals.push(next_val).expect("push failed");
-                ctx.d_all.insert(key, push_idx as u32);
+                ctx.dp_vals
+                    .push(next_val)
+                    .expect("Failed to push to DP state MmapVec (possible disk/memory I/O error)");
+                ctx.d_all.insert(key, push_idx as u64);
             }
 
             // Add to priority queue only if it's a new state or not currently queued.
@@ -261,7 +275,7 @@ fn process_configurations(ctx: &mut DPContext, mut ids: Vec<usize>) {
             if next_n_g as usize == ctx.k {
                 if total_perim < *ctx.opt_perim {
                     *ctx.opt_perim = total_perim;
-                    *ctx.best_sol_idx = push_idx as i64;
+                    *ctx.best_sol_idx = Some(push_idx);
                 }
             }
         }
@@ -300,7 +314,7 @@ pub fn minimize_perimeter_dp(
         n_g: 1,
     };
 
-    let mut best_sol_idx = -1;
+    let mut best_sol_idx = None;
 
     let mut pq = BinaryHeap::new();
     pq.push(QueueItem {
@@ -328,8 +342,6 @@ pub fn minimize_perimeter_dp(
         cfg: start_key,
         perimeter_so_far: 0.0,
         prev_idx: 0,
-        next_edge_start_idx: 0,
-        next_edge_end_idx: vg.adjacency_list[start_loc_id].len() as u32,
     };
     dp_vals.push(start_val)?;
 
@@ -401,8 +413,11 @@ pub fn minimize_perimeter_dp(
         }
     }
 
-    assert!( *ctx.best_sol_idx > 0, "No solution found by DP solver. This should never happen since the origin itself is a valid solution." );
+    assert!(
+        ctx.best_sol_idx.is_some(),
+        "No solution found by DP solver. This should never happen since the origin itself is a valid solution."
+    );
     println!("# of configurations generated: {}", *ctx.conf_count);
-    let sol = extract_solution(&ctx.dp_vals, *ctx.best_sol_idx as u32, ctx.good);
+    let sol = extract_solution(&ctx.dp_vals, ctx.best_sol_idx.unwrap(), ctx.good);
     Ok((sol, ub_circle, *ctx.conf_count))
 }

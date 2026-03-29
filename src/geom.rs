@@ -140,7 +140,7 @@ pub fn double_triangle_area(a: Point2D, b: Point2D, c: Point2D) -> i64 {
     (a.x as i64 * (b.y as i64 - c.y as i64)
         + (b.x as i64) * (c.y as i64 - a.y as i64)
         + (c.x as i64) * (a.y as i64 - b.y as i64))
-        .abs() as i64
+        .abs()
 }
 
 /// Signed area of a triangle (a, b, c).
@@ -154,8 +154,9 @@ pub fn grid_points_inside_edge(u: Point2D, v: Point2D) -> u32 {
     if u == v {
         return 0;
     }
-    let e = u - v;
-    let t = gcd(e.x as i64, e.y as i64).abs();
+    let dx = (u.x as i64 - v.x as i64).abs();
+    let dy = (u.y as i64 - v.y as i64).abs();
+    let t = gcd(dx, dy);
     (t - 1) as u32
 }
 
@@ -774,9 +775,11 @@ pub fn len_longest_primitive_edge(poly: &[Point2D]) -> f64 {
     for i in 0..poly.len() {
         let (p1, p2) = (poly[i], poly[(i + 1) % poly.len()]);
         let mut d = p2 - p1;
-        let g = gcd(d.x.abs() as u64, d.y.abs() as u64) as i64;
-        d.x /= g as CoordType;
-        d.y /= g as CoordType;
+        let g = gcd(d.x as i64, d.y as i64).abs();
+        if g > 0 {
+            d.x /= g as CoordType;
+            d.y /= g as CoordType;
+        }
         max_sq = max_sq.max(dot(&d, &d));
     }
     (max_sq as f64).sqrt()

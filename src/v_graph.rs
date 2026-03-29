@@ -40,6 +40,13 @@ pub struct VisibilityGraph {
     pub adjacency_list: Vec<Vec<EdgeInfo>>,
 }
 
+impl VisibilityGraph {
+    /// Returns the total number of edges in the graph.
+    pub fn num_edges(&self) -> usize {
+        self.adjacency_list.iter().map(|v| v.len()).sum()
+    }
+}
+
 /// Calculates the turn angle between segments (u,v) and (v,w).
 pub fn turn_angle(u: Point2D, v: Point2D, w: Point2D) -> f64 {
     let p_uv = v - u;
@@ -262,6 +269,6 @@ pub fn topological_sort(vg: &VisibilityGraph) -> Option<Vec<usize>> {
     if result.len() == n {
         Some(result)
     } else {
-        Some(result)
+        None
     }
 }
