@@ -120,7 +120,7 @@ pub struct DPContext<'a> {
     /// Global upper bound on the optimal perimeter found so far.
     pub opt_perim: &'a mut f64,
     /// Index of the best complete solution found.
-    pub best_sol_idx: &'a mut u32,
+    pub best_sol_idx: &'a mut i64,
     /// Target number of grid points to enclose.
     pub k: usize,
     /// The set of valid grid points.
@@ -261,7 +261,7 @@ fn process_configurations(ctx: &mut DPContext, mut ids: Vec<usize>) {
             if next_n_g as usize == ctx.k {
                 if total_perim < *ctx.opt_perim {
                     *ctx.opt_perim = total_perim;
-                    *ctx.best_sol_idx = push_idx as u32;
+                    *ctx.best_sol_idx = push_idx as i64;
                 }
             }
         }
@@ -291,7 +291,7 @@ pub fn minimize_perimeter_dp(
     let mask = (1 << power) - 1;
 
     // Start with a naive upper bound on the perimeter.
-    let mut opt_perim = ub_circle.min(sq_perim);
+    let mut opt_perim = 0.2 + ub_circle.min(sq_perim);
 
     // Initial state: origin (0,0) which encloses 1 point by definition.
     let start_loc_id = good.get_point_id(Point2D::new(0, 0));
@@ -300,7 +300,7 @@ pub fn minimize_perimeter_dp(
         n_g: 1,
     };
 
-    let mut best_sol_idx = 0;
+    let mut best_sol_idx = -1;
 
     let mut pq = BinaryHeap::new();
     pq.push(QueueItem {
@@ -401,7 +401,8 @@ pub fn minimize_perimeter_dp(
         }
     }
 
+    assert!( *ctx.best_sol_idx > 0, "No solution found by DP solver. This should never happen since the origin itself is a valid solution." );
     println!("# of configurations generated: {}", *ctx.conf_count);
-    let sol = extract_solution(&ctx.dp_vals, *ctx.best_sol_idx, ctx.good);
+    let sol = extract_solution(&ctx.dp_vals, *ctx.best_sol_idx as u32, ctx.good);
     Ok((sol, ub_circle, *ctx.conf_count))
 }

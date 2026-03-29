@@ -5,7 +5,10 @@
 //! 2. It doesn't intersect the forbidden "bad set".
 //! 3. It maintains the required convexity and turn angle constraints.
 
-use crate::geom::{GridSet, is_all_left_turns, does_segment_intersect_polygon, is_right_turn, is_colinear, triangle_count_new_points, is_lefteq_turn, is_left_turn};
+use crate::geom::{
+    does_segment_intersect_polygon, is_all_left_turns, is_colinear, is_left_turn, is_lefteq_turn,
+    is_right_turn, triangle_count_new_points, GridSet,
+};
 use crate::kd_tree::{BBox, KDTree, Status};
 use crate::point::*;
 use std::collections::VecDeque;
@@ -44,8 +47,12 @@ pub fn turn_angle(u: Point2D, v: Point2D, w: Point2D) -> f64 {
     let angle_uv = (p_uv.y as f64).atan2(p_uv.x as f64);
     let angle_vw = (p_vw.y as f64).atan2(p_vw.x as f64);
     let mut diff = angle_vw - angle_uv;
-    while diff < 0.0 { diff += 2.0 * std::f64::consts::PI; }
-    while diff >= 2.0 * std::f64::consts::PI { diff -= 2.0 * std::f64::consts::PI; }
+    while diff < 0.0 {
+        diff += 2.0 * std::f64::consts::PI;
+    }
+    while diff >= 2.0 * std::f64::consts::PI {
+        diff -= 2.0 * std::f64::consts::PI;
+    }
     diff
 }
 
@@ -55,10 +62,16 @@ pub fn sort_adjacency_list_edges(good: &GridSet, u: Point2D, edges: &mut [EdgeIn
     edges.sort_by(|a, b| {
         let p = *good.get_point_by_id(a.target_id);
         let q = *good.get_point_by_id(b.target_id);
-        if p == q { return std::cmp::Ordering::Equal; }
-        if is_left_turn(u, p, q) { std::cmp::Ordering::Less }
-        else if is_right_turn(u, p, q) { std::cmp::Ordering::Greater }
-        else { (p - u).norm_sq().cmp(&(q - u).norm_sq()) }
+        if p == q {
+            return std::cmp::Ordering::Equal;
+        }
+        if is_left_turn(u, p, q) {
+            std::cmp::Ordering::Less
+        } else if is_right_turn(u, p, q) {
+            std::cmp::Ordering::Greater
+        } else {
+            (p - u).norm_sq().cmp(&(q - u).norm_sq())
+        }
     });
 }
 
@@ -66,18 +79,33 @@ pub fn sort_adjacency_list_edges(good: &GridSet, u: Point2D, edges: &mut [EdgeIn
 fn halfplane_bbox_status(bbox: &BBox, a: Point2D, b: Point2D, inclusive: bool) -> Status {
     let dx = b.x as i64 - a.x as i64;
     let dy = b.y as i64 - a.y as i64;
-    let mut min_f = i64::MAX; let mut max_f = i64::MIN;
-    let corners = [(bbox.min_x, bbox.min_y), (bbox.min_x, bbox.max_y), (bbox.max_x, bbox.min_y), (bbox.max_x, bbox.max_y)];
+    let mut min_f = i64::MAX;
+    let mut max_f = i64::MIN;
+    let corners = [
+        (bbox.min_x, bbox.min_y),
+        (bbox.min_x, bbox.max_y),
+        (bbox.max_x, bbox.min_y),
+        (bbox.max_x, bbox.max_y),
+    ];
     for (x, y) in corners {
         let f = dx * (y as i64 - a.y as i64) - dy * (x as i64 - a.x as i64);
-        min_f = min_f.min(f); max_f = max_f.max(f);
+        min_f = min_f.min(f);
+        max_f = max_f.max(f);
     }
     if inclusive {
-        if min_f >= 0 { return Status::Inside; }
-        if max_f < 0 { return Status::Outside; }
+        if min_f >= 0 {
+            return Status::Inside;
+        }
+        if max_f < 0 {
+            return Status::Outside;
+        }
     } else {
-        if min_f > 0 { return Status::Inside; }
-        if max_f <= 0 { return Status::Outside; }
+        if min_f > 0 {
+            return Status::Inside;
+        }
+        if max_f <= 0 {
+            return Status::Outside;
+        }
     }
     Status::Partial
 }
@@ -91,13 +119,13 @@ pub fn build_visibility_graph(
     bad_ch: &[Point2D],
     so_so: &[Point2D],
     dirs: &Vec<Point2D>,
-    k: usize,
+    _k: usize,
     max_turn_angle: f64,
 ) -> VisibilityGraph {
     let start_vg = Instant::now();
     let n = good.num_points();
     let mut adjacency_list = vec![vec![]; n];
-    let sqrt_k = (k as f64).sqrt().ceil() as i32 + 1;
+    //let sqrt_k = (k as f64).sqrt().ceil() as i32 + 1;
 
     let tree = KDTree::new(so_so.to_vec());
     for i in 0..n {
@@ -105,21 +133,35 @@ pub fn build_visibility_graph(
         for &q_dir in dirs {
             let q = p + q_dir;
             // Basic boundary and origin constraints.
-            if q.y < 0 || q.is_zero() || q == p { continue; }
-            if (q.x as i64).abs() > (sqrt_k as i64) || q.y as i64 > (2 * sqrt_k as i64) { continue; }
-            if !good.contains(&q) { continue; }
+            if q.y < 0 || q.is_zero() || q == p {
+                continue;
+            }
+            //if (q.x as i64).abs() > (sqrt_k as i64) || q.y as i64 > (2 * sqrt_k as i64) { continue; }
+            if !good.contains(&q) {
+                continue;
+            }
 
             // Ensure the edge doesn't wrap "behind" the origin (maintains convexity).
-            if is_right_turn(p, q, ORIGIN) { continue; }
-            if is_colinear(p, q, ORIGIN) && q.norm_sq() < p.norm_sq() { continue; }
+            if is_right_turn(p, q, ORIGIN) {
+                continue;
+            }
+            // is q between p and the orgin? If so, skip.
+            if is_colinear(p, q, ORIGIN) && q.norm_sq() < p.norm_sq() {
+                continue;
+            }
+
+            if !is_all_left_turns(p, q, bad_ch) {
+                continue;
+            }
 
             // Visibility: cannot cross the forbidden interior.
-            if does_segment_intersect_polygon(bad_ch, p, q) { continue; }
-            if !is_all_left_turns(p, q, bad_ch) { continue; }
+            if does_segment_intersect_polygon(bad_ch, p, q) {
+                continue;
+            }
 
             let q_id = good.get_point_id(q);
             let (tri_i, tri_b) = triangle_count_new_points(ORIGIN, p, q);
-            
+
             // Heuristic enclosure pruning: count points in the wedge defined by (origin, p, q).
             let max_addion_g = tree.count_in_region(
                 |pt| is_left_turn(ORIGIN, q, pt) && !is_right_turn(p, q, pt),
@@ -146,12 +188,16 @@ pub fn build_visibility_graph(
         }
     }
 
+    println!("   Edge constructed. Now sorting edges and precalculating ranges...");
+    println!("   elaped time: {}", start_vg.elapsed().as_secs_f64());
     // Sort edges CCW to enable efficient range lookups during DP.
     for i in 0..n {
         let u = good.points[i];
         sort_adjacency_list_edges(good, u, &mut adjacency_list[i]);
     }
 
+    println!("   Now calculating in/out ranges for edges...");
+    println!("   elaped time: {}", start_vg.elapsed().as_secs_f64());
     // Precalculate suffix ranges: for each edge (u,v), find the range of edges (v,w)
     // that are convex relative to (u,v) and within the turn angle limit.
     for i in 0..n {
@@ -165,7 +211,9 @@ pub fn build_visibility_graph(
             for (idx, edge_vw) in out_edges.iter().enumerate() {
                 let w = *good.get_point_by_id(edge_vw.target_id);
                 if is_lefteq_turn(u, *good.get_point_by_id(v_id), w) {
-                    if start_idx == out_edges.len() as u32 { start_idx = idx as u32; }
+                    if start_idx == out_edges.len() as u32 {
+                        start_idx = idx as u32;
+                    }
                     if turn_angle(u, *good.get_point_by_id(v_id), w) <= max_turn_angle + 1e-9 {
                         // Turn angle is valid.
                     } else if end_idx == out_edges.len() as u32 {
@@ -177,7 +225,10 @@ pub fn build_visibility_graph(
             adjacency_list[i][j].next_edge_end_idx = end_idx;
         }
     }
-    println!("   Total build_visibility_graph took: {:?}", start_vg.elapsed());
+    println!(
+        "   Total build_visibility_graph took: {:?}",
+        start_vg.elapsed()
+    );
     VisibilityGraph { adjacency_list }
 }
 
@@ -187,18 +238,30 @@ pub fn topological_sort(vg: &VisibilityGraph) -> Option<Vec<usize>> {
     let n = vg.adjacency_list.len();
     let mut in_degree = vec![0; n];
     for u in 0..n {
-        for edge in &vg.adjacency_list[u] { in_degree[edge.target_id] += 1; }
+        for edge in &vg.adjacency_list[u] {
+            in_degree[edge.target_id] += 1;
+        }
     }
     let mut queue = VecDeque::new();
-    for i in 0..n { if in_degree[i] == 0 { queue.push_back(i); } }
+    for i in 0..n {
+        if in_degree[i] == 0 {
+            queue.push_back(i);
+        }
+    }
     let mut result = Vec::with_capacity(n);
     while let Some(u) = queue.pop_front() {
         result.push(u);
         for edge in &vg.adjacency_list[u] {
             let v = edge.target_id;
             in_degree[v] -= 1;
-            if in_degree[v] == 0 { queue.push_back(v); }
+            if in_degree[v] == 0 {
+                queue.push_back(v);
+            }
         }
     }
-    if result.len() == n { Some(result) } else { Some(result) }
+    if result.len() == n {
+        Some(result)
+    } else {
+        Some(result)
+    }
 }

@@ -175,11 +175,21 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let b_n = boundary_grid_points(&sol_c);
     let v_n = sol_c.len();
 
+    let mut log = String::new();
+
+    // Save before chekcing if the solution is valid, to have a record of the output even if Pick's theorem fails.
+    save_polygon(
+        &format!("{}/{:07}_poly.txt", dir_polys, k),
+        &sol,
+        Some(&log),
+    )?;
+
     // Pick's theorem verification: A = I + B/2 - 1 => A = k - B/2 - 1
     // k = A + B/
     let k_by_pick = area + (b_n as f64) / 2.0 + 1.0;
     if (k as f64 - k_by_pick).abs() > 1e-3 {
         println!("Error: Pick's Theorem verification failed.");
+        println!("solution # of edges  : {}", sol.len());
         println!("Computed area        : {}", area);
         println!("Boundary points (B)  : {}", b_n);
         println!("k by Pick's          : {}", k_by_pick);
@@ -203,7 +213,6 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
     }
 
-    let mut log = String::new();
     let mut log_and_print =
         |label: &str, value: &dyn std::fmt::Display| -> Result<(), Box<dyn std::error::Error>> {
             writeln!(log, "# {:26} : {}", label, value)?;
@@ -230,19 +239,14 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     log_and_print("Longest primitive edge len", &len_p_longest)?;
     log_and_print("UB primitive edge len", &max_edge_l)?;
-    log_and_print("DP duration", &dp_duration.as_secs_f64())?;
-    log_and_print("Running time in seconds", &rt)?;
 
     log_and_print("Min dist bad pnt to sol", &min_bad_d)?;
 
-    save_polygon(
-        &format!("{}/{:06}_poly.txt", dir_polys, k),
-        &sol,
-        Some(&log),
-    )?;
+    log_and_print("DP duration", &dp_duration.as_secs_f64())?;
+    log_and_print("Running time in seconds", &rt)?;
 
     // Save summary log for this run.
-    let mut log_fl = File::create(format!("{}/{:06}_s.txt", dir_summary, k))?;
+    let mut log_fl = File::create(format!("{}/{:07}_s.txt", dir_summary, k))?;
     writeln!(log_fl, "{}", &log)?;
 
     Ok(())
