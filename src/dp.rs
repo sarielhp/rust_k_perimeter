@@ -285,7 +285,9 @@ fn process_configurations(ctx: &mut DPContext, mut ids: Vec<usize>) {
 /// Heuristic for the maximum allowed length of a single polygon segment based on k.
 pub fn max_edge_length(k: usize) -> u32 {
     //    ((k as f64).powf(1.0 / 3.0) / 2.0).round() as u32 + 2
-    (5.0 + 2.0 * (k as f64).powf(1.0 / 6.0)).round() as u32 + 2
+    // Safe:
+    // (5.0 + 2.0 * (k as f64).powf(1.0 / 6.0)).round() as u32 + 2
+    (2.0 + 1.5 * (k as f64).powf(1.0 / 6.0)).round() as u32 + 2
 }
 
 /// Entry point for the DP solver.

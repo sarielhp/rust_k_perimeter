@@ -101,7 +101,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // Stage 2: Grid Partitioning.
     // Identifies "good" points (near the boundary) and "bad" points (deep inside).
-    let l_f = 2 + ((k as f64).powf(0.25) / 4.0).round() as i64;
+    // The save version:
+    //    let l_f = 7 + (1.2 * (k as f64).powf(0.25) / 4.0).round() as i64;
+    let l_f = 1 + (1.1 * (k as f64).powf(0.25) / 4.0).round() as i64;
     let l = if l_f > 3 { l_f } else { 3 };
 
     println!("Computing good and bad sets with width = {}...", l);
