@@ -1,0 +1,25 @@
+#!/bin/bash
+
+# 1. Collect all Rust files, skipping the target directory
+# We use 'fd' for speed, but 'find' works too.
+FILES=$(fd -e rs)
+
+# 2. Create a temporary context file
+echo "Generating context from: $FILES"
+context_file=$(mktemp)
+
+for file in $FILES; do
+  echo -e "\n--- FILE: $file ---\n" >> "$context_file"
+  cat "$file" >> "$context_file"
+done
+
+# 3. Pipe to Gemini (assuming 'gemini-cli' is your alias/tool)
+cat "$context_file" | gemini "You are a Rust expert. Based on this code for the 'rust_k_perimeter' project, create a GEMINI.md file. 
+Include:
+- Project Overview (High-level logic)
+- Data Structures (Focus on VisibilityGraph and memory-mapped structs)
+- Known Issues (Mention the refutable patterns or lifetime constraints found)
+- Performance notes regarding the 'bytemuck' implementation." > GEMINI.md
+
+rm "$context_file"
+echo "GEMINI.md created successfully."

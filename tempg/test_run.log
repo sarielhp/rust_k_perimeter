@@ -1,0 +1,34 @@
+Computing convex-hull of disk around origin with k points... Kind of...
+Computing good and bad sets with width = 5...
+Computing distance of good points to the origin...
+   ...done
+max_turn_angle: 0.4374594414198698
+Building visibility graph...
+   Edge constructed. Now sorting edges and precalculating ranges...
+   elaped time: 0.516817807
+   Now calculating in/out ranges for edges...
+   elaped time: 0.517484705
+   Total build_visibility_graph took: 747.613129ms
+Performing topological sort...
+k: 10000 c:    1,048,958   45%  dpA:     39MB  hash: 571,377  1.39s
+k: 10000 c:    2,097,562   69%  dpA:     69MB  hash: 801,264  2.89s
+k: 10000 c:    2,566,912  100%  dpA:     78MB  hash: 170,186  3.37s
+# of configurations generated: 2566912
+Pick's Theorem verification passed.
+Polygon saved to output/pdfs/010000.pdf
+# k                          : 10000
+# Perimeter                  : 353.4226254324751
+# circle perimeter           : 353.5336267234536
+# Naive perimeter            : 354.4907701811032
+# Area                       : 9918.5
+# vertices                   : 56
+# boundary grid points       : 161
+# Configs computed           : 2566912
+# Max angle of sol           : 0.19739555984988044
+# UB max turn_angle          : 0.4374594414198698
+# Longest edge len           : 13
+# Longest primitive edge len : 6.082762530298219
+# UB primitive edge len      : 16
+# Min dist bad pnt to sol    : 4.024922359499621
+# DP duration                : 3.404754055
+# Running time in seconds    : 4.170762838

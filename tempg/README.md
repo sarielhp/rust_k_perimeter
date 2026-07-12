@@ -1,18 +1,18 @@
 # Smallest k-Perimeter Polygon (k_perimeter_2) — Version 9 (Latest)
 
 > [!NOTE]
-> * This is the **main** branch (originally developed as `v9_branch`), containing Version 9 of the project. It is notably faster than previous iterations.
+> * This is the **main** branch (originally developed as `v9_branch`), containing Version 9 of the project—a major rewrite of the algorithm that is dramatically faster than previous iterations.
 > * Earlier development versions (Version 2 through Version 8) are preserved in this repository in their respective branches (e.g., `v2_branch`, `v3_branch`, etc.).
 
 Joint work with Elfarouk Harb and Qizheng He.
 
 ## Note
 
-This is latest version of the program, which seems to be
+This is a rewrite of the previous program, which seems to be
 dramatically faster. The DP was changed, and it is now much
 smaller. In addition, the code now precomputes a visibility graph to
 help figure out which transitions to use, which also resulted in a
-significant speedup. Among other changes.
+significant speedup
 
 ## k_perimeter_2
 

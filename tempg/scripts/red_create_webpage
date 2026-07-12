@@ -1,0 +1,27 @@
+#! /bin/bash
+
+echo "1. Compute rings"
+scripts/comp_ring_widths
+
+echo "2. Merge rings info "
+scripts/merge_annulus_info
+
+echo "3. Extract info"
+scripts/extract_stats.jl
+
+echo "4. rsyncing to valis"
+
+
+RBASE=/home/sariel/prog/26/k_perimeter/v3_branch
+VDIR=/home/sariel/html/research/26/k_perimeter
+
+rsync -auvr tred:$RBASE/output/ tvalis:$VDIR
+#md -p $vDIR/csv/ >& /dev/null
+
+
+rsync tred:$RBASE/misc/extracted_data.csv tvalis:$VDIR/csv/
+
+echo "5. Rebuilding the webpage itself"
+ssh tvalis "cd $VDIR; scripts/generate_webpage"
+
+echo "6. done"
