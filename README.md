@@ -1,7 +1,8 @@
 # Smallest k-Perimeter Polygon (k_perimeter_2) — Version 9 (Latest)
 
 > [!NOTE]
-> This is the **main** branch (originally developed as `v9_branch`), containing Version 9 of the project—a major rewrite of the algorithm that is dramatically faster than previous iterations.
+> * This is the **main** branch (originally developed as `v9_branch`), containing Version 9 of the project—a major rewrite of the algorithm that is dramatically faster than previous iterations.
+> * Earlier development versions (Version 2 through Version 8) are preserved in this repository in their respective branches (e.g., `v2_branch`, `v3_branch`, etc.).
 
 Joint work with Elfarouk Harb.
 
