@@ -1,6 +1,6 @@
 # Smallest k-Perimeter Polygon (k_perimeter_2)
 
-Joint work with Elfarouk Harb.
+Joint work with Elfarouk Harb and Qizheng He.
 
 ## Note
 
