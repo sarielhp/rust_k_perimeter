@@ -278,36 +278,6 @@ pub fn is_point_on_segment(a: Point2D, b: Point2D, c: Point2D) -> bool {
     b.x >= min_x && b.x <= max_x && b.y >= min_y && b.y <= max_y
 }
 
-/// Legacy multi-pass algorithm for removing redundant collinear vertices.
-#[allow(dead_code)]
-pub fn polygon_rm_redundant_vertices_old(poly: &[Point2D]) -> Vec<Point2D> {
-    let mut current = poly.to_vec();
-    loop {
-        let n = current.len();
-        if n <= 2 {
-            return current;
-        }
-        let mut out = Vec::with_capacity(n);
-        for i in 0..n {
-            let prev = current[(i + n - 1) % n];
-            let cur = current[i];
-            let next = current[(i + 1) % n];
-            if !is_point_on_segment(prev, cur, next) {
-                out.push(cur);
-            }
-        }
-        if out.len() == n {
-            return out;
-        }
-        if out.is_empty() {
-            if !poly.is_empty() {
-                out.push(poly[0]);
-            }
-            return out;
-        }
-        current = out;
-    }
-}
 
 /// Simplifies a polygon by removing vertices that lie in the middle of straight edges.
 /// Linear time O(V) stack-based algorithm.
@@ -886,7 +856,6 @@ mod tests {
             Point2D::new(0, 2),
         ];
         assert_eq!(cleaned, expected);
-        assert_eq!(cleaned, polygon_rm_redundant_vertices_old(&poly));
     }
 
     #[test]
@@ -908,68 +877,45 @@ mod tests {
             Point2D::new(0, 2),
         ];
         assert_eq!(cleaned, expected);
-        assert_eq!(cleaned, polygon_rm_redundant_vertices_old(&poly));
     }
 
     #[test]
-    fn test_linear_vs_old_cleanup_equivalence() {
-        let test_cases = vec![
-            // Case 1: Simple square with collinear points on all 4 sides
-            vec![
-                Point2D::new(0, 0),
-                Point2D::new(1, 0),
-                Point2D::new(2, 0),
-                Point2D::new(2, 1),
-                Point2D::new(2, 2),
-                Point2D::new(1, 2),
-                Point2D::new(0, 2),
-                Point2D::new(0, 1),
-            ],
-            // Case 2: Start vertex is collinear
-            vec![
-                Point2D::new(1, 0),
-                Point2D::new(2, 0),
-                Point2D::new(2, 2),
-                Point2D::new(0, 2),
-                Point2D::new(0, 0),
-            ],
-            // Case 3: End vertex is collinear
-            vec![
-                Point2D::new(0, 0),
-                Point2D::new(2, 0),
-                Point2D::new(2, 2),
-                Point2D::new(0, 2),
-                Point2D::new(0, 1),
-            ],
-            // Case 4: L-shaped polygon with multiple collinear points
-            vec![
-                Point2D::new(0, 0),
-                Point2D::new(2, 0),
-                Point2D::new(4, 0),
-                Point2D::new(4, 2),
-                Point2D::new(2, 2),
-                Point2D::new(2, 4),
-                Point2D::new(0, 4),
-                Point2D::new(0, 2),
-            ],
-            // Case 5: Triangle with intermediate points
-            vec![
-                Point2D::new(0, 0),
-                Point2D::new(2, 0),
-                Point2D::new(4, 0),
-                Point2D::new(2, 4),
-                Point2D::new(1, 2),
-            ],
+    fn test_polygon_rm_redundant_vertices_start_and_end_collinear() {
+        // Start vertex is collinear
+        let poly_start = vec![
+            Point2D::new(1, 0),
+            Point2D::new(2, 0),
+            Point2D::new(2, 2),
+            Point2D::new(0, 2),
+            Point2D::new(0, 0),
         ];
+        let expected_start = vec![
+            Point2D::new(2, 0),
+            Point2D::new(2, 2),
+            Point2D::new(0, 2),
+            Point2D::new(0, 0),
+        ];
+        assert_eq!(polygon_rm_redundant_vertices(&poly_start), expected_start);
 
-        for (idx, poly) in test_cases.iter().enumerate() {
-            let new_res = polygon_rm_redundant_vertices(poly);
-            let old_res = polygon_rm_redundant_vertices_old(poly);
-            assert_eq!(
-                new_res, old_res,
-                "Test case {} failed equivalence check!",
-                idx
-            );
-        }
+        // L-shaped polygon with multiple collinear points on edges
+        let poly_l = vec![
+            Point2D::new(0, 0),
+            Point2D::new(2, 0),
+            Point2D::new(4, 0),
+            Point2D::new(4, 2),
+            Point2D::new(2, 2),
+            Point2D::new(2, 4),
+            Point2D::new(0, 4),
+            Point2D::new(0, 2),
+        ];
+        let expected_l = vec![
+            Point2D::new(0, 0),
+            Point2D::new(4, 0),
+            Point2D::new(4, 2),
+            Point2D::new(2, 2),
+            Point2D::new(2, 4),
+            Point2D::new(0, 4),
+        ];
+        assert_eq!(polygon_rm_redundant_vertices(&poly_l), expected_l);
     }
 }
