@@ -5,7 +5,7 @@ All notable changes to this project will be documented in this file.
 ## [0.2.2] - 2026-07-19
 
 ### Added
-- **Multi-page PDF Information Section**: PDFs generated for figures now contain all standard output log information (execution stages, timing metrics, Pick's theorem verification, and final statistics) starting on page 2.
+- **Multi-page PDF Information Section**: PDFs generated for figures now contain the execution summary metrics starting on page 2, filtered to include only lines starting with `#`.
 - **Color & Polygon Legend**: Added an explanation header at the top of the PDF info pages detailing all rendered elements:
   - **Optimal Solution Polygon**: Blue fill with black boundary (line width 1.0).
   - **Baseline Disk Polygon (`ch_m`)**: Red/orange outlined baseline convex hull.

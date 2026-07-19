@@ -247,6 +247,12 @@ pub fn draw_polygon_with_grid(
     let text_page_h = height.max(750.0);
     surface.set_size(text_page_w, text_page_h).unwrap();
 
+    let hash_info = stdout_info
+        .lines()
+        .filter(|line| line.trim_start().starts_with('#'))
+        .collect::<Vec<&str>>()
+        .join("\n");
+
     // Construct full text info for Page 2 and subsequent pages
     let full_info = format!(
 r#"================================================================================
@@ -279,10 +285,10 @@ Grid Points (Dots):
     (interior bad-set points deep inside or exterior points outside search set).
 
 ================================================================================
-STANDARD OUTPUT LOG
+SUMMARY METRICS
 ================================================================================
 {}"#,
-        k, stdout_info
+        k, hash_info
     );
 
     render_text_pages(&cr, text_page_w, text_page_h, &full_info);
