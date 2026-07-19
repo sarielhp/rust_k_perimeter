@@ -33,6 +33,7 @@ use std::{env, fmt::Write as StrWrite};
 use crate::geom::{
     boundary_grid_points, compute_max_turn_angle, len_longest_edge, len_longest_primitive_edge,
     polygon_area, polygon_boundary_distance, polygon_rm_redundant_vertices,
+    polygon_rm_redundant_vertices_old,
 };
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -170,6 +171,11 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let rt = start.elapsed().as_secs_f64();
 
     let sol_c = polygon_rm_redundant_vertices(&sol);
+    let sol_c_old = polygon_rm_redundant_vertices_old(&sol);
+    assert_eq!(
+        sol_c, sol_c_old,
+        "Mismatch between linear and old polygon_rm_redundant_vertices!"
+    );
     let perimeter = compute_perimeter(&sol_c);
     let area = polygon_area(&sol_c);
     let b_n = boundary_grid_points(&sol_c);
