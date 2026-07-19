@@ -171,8 +171,14 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Verify results with Pick's Theorem and save outputs.
     let rt = start.elapsed().as_secs_f64();
 
+    let t_start_linear = Instant::now();
     let sol_c = polygon_rm_redundant_vertices(&sol);
+    let cleanup_linear_dur = t_start_linear.elapsed();
+
+    let t_start_old = Instant::now();
     let sol_c_old = polygon_rm_redundant_vertices_old(&sol);
+    let cleanup_old_dur = t_start_old.elapsed();
+
     assert_eq!(
         sol_c, sol_c_old,
         "Mismatch between linear and old polygon_rm_redundant_vertices!"
@@ -248,6 +254,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     log_and_print("Min dist bad pnt to sol", &min_bad_d)?;
 
     log_and_print("DP duration", &dp_duration.as_secs_f64())?;
+    log_and_print("Cleanup linear duration", &cleanup_linear_dur.as_secs_f64())?;
+    log_and_print("Cleanup old duration", &cleanup_old_dur.as_secs_f64())?;
     log_and_print("Running time in seconds", &rt)?;
 
     // Draw PDF with page 1 figure and page 2+ color explanations and standard output log.
