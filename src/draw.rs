@@ -179,17 +179,17 @@ pub fn draw_polygon_with_grid(
     let trans_poly_circ_exp: Vec<(f64, f64)> =
         poly_circ_exp.iter().map(|&p| translate(p)).collect();
 
-    // Draw the circle-like estimated bounds first.
-    cr.set_line_width(1.0);
-    cr.set_source_rgb(0.1, 1.0, 0.1);
-    draw_polygon(&cr, &trans_poly_circ_exp, (0.1, 0.9, 0.1, 0.1));
-    cr.set_source_rgb(0.9, 0.5, 0.8);
-    draw_polygon(&cr, &trans_poly_circ, (0.9, 0.5, 0.2, 0.01));
-
-    // Draw the optimal polygon with black boundary (width 1.0) and blue fill.
+    // Draw the optimal polygon FIRST (with black boundary width 1.0 and blue fill).
     cr.set_line_width(1.0);
     cr.set_source_rgb(0.0, 0.0, 0.0);
     draw_polygon(&cr, &trans_poly, (0.2, 0.5, 0.8, 1.0));
+
+    // Draw the circle-like estimated bounds on top so they remain visible.
+    cr.set_line_width(1.0);
+    cr.set_source_rgb(0.9, 0.5, 0.8);
+    draw_polygon(&cr, &trans_poly_circ, (0.9, 0.5, 0.2, 0.01));
+    cr.set_source_rgb(0.1, 1.0, 0.1);
+    draw_polygon(&cr, &trans_poly_circ_exp, (0.1, 0.9, 0.1, 0.1));
 
     let rad: f64 = width / (20.0 * (max_x as f64));
     // Draw the grid points, color-coded by their status (origin, good, bad).

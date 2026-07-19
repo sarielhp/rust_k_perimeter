@@ -18,5 +18,5 @@ All notable changes to this project will be documented in this file.
 
 ### Changed
 - **Optimal Polygon Styling**: Optimal solution polygon boundary is now rendered in black with a line width of `1.0` (previously blue with width `2.0`).
-- **Rendering Order**: Polygons are now drawn before grid points, ensuring grid dots are drawn cleanly on top of all polygon boundaries.
+- **Rendering Order**: Optimal polygon is drawn first, followed by estimated bound polygons (`ch_m` and `ch_m_exp`) on top so they remain visible, followed by grid points on top of all polygons.
 - **Cleaned-up Polygon Storage & Linear $O(V)$ Algorithm**: Implemented a single-pass $O(V)$ stack-based cleanup algorithm (`polygon_rm_redundant_vertices` in `geom.rs`) that pops redundant collinear vertices as points are inserted and resolves wraparound boundary collinearity. Retained the legacy multi-pass algorithm (`polygon_rm_redundant_vertices_old`) and added unit tests asserting exact equivalence across all test cases.
