@@ -22,6 +22,7 @@ use dp::{max_edge_length, minimize_perimeter_dp};
 use draw::{compute_perimeter, draw_polygon_with_grid};
 use geom::{ch_disk_origin, compute_good_set, vtrans};
 use point::*;
+use num_format::{Locale, ToFormattedString};
 use polygon::*;
 use v_graph::build_visibility_graph;
 
@@ -224,14 +225,14 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             Ok(())
         };
 
-    log_and_print("k", &k)?;
+    log_and_print("k", &k.to_formatted_string(&Locale::en))?;
     log_and_print("Perimeter", &perimeter)?;
     log_and_print("circle perimeter", &ch_m_perimeter)?;
     log_and_print("Naive perimeter", &ub_circle)?;
     log_and_print("Area", &area)?;
-    log_and_print("vertices", &(v_n as f64))?;
-    log_and_print("boundary grid points", &(b_n as f64))?;
-    log_and_print("Configs computed", &(conf_count as f64))?;
+    log_and_print("vertices", &v_n.to_formatted_string(&Locale::en))?;
+    log_and_print("boundary grid points", &b_n.to_formatted_string(&Locale::en))?;
+    log_and_print("Configs computed", &conf_count.to_formatted_string(&Locale::en))?;
 
     let c_max_angle = compute_max_turn_angle(&sol_c);
     log_and_print("Max angle of sol", &c_max_angle)?;
@@ -242,7 +243,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     log_and_print("Longest edge len", &len_longest)?;
 
     log_and_print("Longest primitive edge len", &len_p_longest)?;
-    log_and_print("UB primitive edge len", &max_edge_l)?;
+    log_and_print("UB primitive edge len", &max_edge_l.to_formatted_string(&Locale::en))?;
 
     log_and_print("Min dist bad pnt to sol", &min_bad_d)?;
 

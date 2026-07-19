@@ -6,6 +6,7 @@
 use crate::geom::{bound, GridSet};
 use crate::point::*;
 use cairo::{Context, FontSlant, FontWeight, PdfSurface};
+use num_format::{Locale, ToFormattedString};
 
 /// Helper to wrap a single line of text if it exceeds `max_width` points.
 fn wrap_line(cr: &Context, line: &str, max_width: f64) -> Vec<String> {
@@ -288,7 +289,7 @@ Grid Points (Dots):
 SUMMARY METRICS
 ================================================================================
 {}"#,
-        k, hash_info
+        k.to_formatted_string(&Locale::en), hash_info
     );
 
     render_text_pages(&cr, text_page_w, text_page_h, &full_info);
