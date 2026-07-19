@@ -207,11 +207,11 @@ pub fn draw_polygon_with_grid(
             }
             // Search set
             else {
-                // Red point: draw only if distance <= 5 to a non-red point or grid boundary
-                let near_grid_boundary = (x - min_x) <= 5
-                    || (max_x - x) <= 5
-                    || (y - min_y) <= 5
-                    || (max_y - y) <= 5;
+                // Red point: draw only if distance <= 5 to a non-red point or distance <= 1 to grid boundary
+                let near_grid_boundary = (x - min_x) <= 1
+                    || (max_x - x) <= 1
+                    || (y - min_y) <= 1
+                    || (max_y - y) <= 1;
 
                 let mut near_non_red = false;
                 if !near_grid_boundary {
