@@ -7,24 +7,111 @@ use crate::geom::{bound, GridSet};
 use crate::point::*;
 use cairo::{Context, FontSlant, FontWeight, PdfSurface};
 
-/// Renders a text summary onto the PDF surface.
-fn cr_string_pdf(cr: &Context, w: f64, h: f64, text_content: &str) {
-    cr.set_source_rgb(1.0, 1.0, 1.0);
-    cr.rectangle(0.0, 0.0, w, h);
-    cr.fill().unwrap();
+/// Helper to wrap a single line of text if it exceeds `max_width` points.
+fn wrap_line(cr: &Context, line: &str, max_width: f64) -> Vec<String> {
+    if line.is_empty() {
+        return vec!["".to_string()];
+    }
+    let extents = match cr.text_extents(line) {
+        Ok(ext) => ext,
+        Err(_) => return vec![line.to_string()],
+    };
+    if extents.x_advance() <= max_width {
+        return vec![line.to_string()];
+    }
 
-    cr.select_font_face("Sans", FontSlant::Normal, FontWeight::Bold);
-    cr.set_font_size(8.0);
-    let fh = 16.0;
+    let mut result = Vec::new();
+    let mut current_subline = String::new();
 
-    let lines: Vec<&str> = text_content.lines().collect();
-    let mut current_y = fh * 1.5;
+    for word in line.split(' ') {
+        let test_line = if current_subline.is_empty() {
+            word.to_string()
+        } else {
+            format!("{} {}", current_subline, word)
+        };
 
-    cr.set_source_rgb(0.0, 0.0, 0.0);
-    for line in lines {
-        cr.move_to(10.0, current_y);
-        cr.show_text(line).unwrap();
-        current_y += fh;
+        let advance = cr.text_extents(&test_line).map(|e| e.x_advance()).unwrap_or(0.0);
+        if advance <= max_width {
+            current_subline = test_line;
+        } else {
+            if !current_subline.is_empty() {
+                result.push(current_subline);
+            }
+            current_subline = word.to_string();
+        }
+    }
+
+    if !current_subline.is_empty() {
+        result.push(current_subline);
+    }
+
+    if result.is_empty() {
+        vec![line.to_string()]
+    } else {
+        result
+    }
+}
+
+/// Renders multi-page text information onto the PDF surface.
+fn render_text_pages(cr: &Context, width: f64, height: f64, text_content: &str) {
+    let margin_x = 35.0;
+    let margin_y = 35.0;
+    let font_size = 9.0;
+    let line_height = 13.0;
+
+    let page_width = width.max(600.0);
+    let page_height = height.max(750.0);
+    let max_text_width = page_width - 2.0 * margin_x;
+    let max_y = page_height - margin_y;
+
+    let prepare_page = |cr: &Context| {
+        cr.set_source_rgb(1.0, 1.0, 1.0);
+        cr.rectangle(0.0, 0.0, page_width, page_height);
+        cr.fill().unwrap();
+        cr.set_source_rgb(0.0, 0.0, 0.0);
+    };
+
+    prepare_page(cr);
+    let mut current_y = margin_y + font_size;
+
+    for line in text_content.lines() {
+        let apply_style = |cr: &Context, _subline: &str| {
+            if line.starts_with("===") || line.starts_with("---") {
+                cr.select_font_face("Monospace", FontSlant::Normal, FontWeight::Bold);
+                cr.set_font_size(font_size);
+                cr.set_source_rgb(0.3, 0.3, 0.3);
+            } else if line.starts_with("FIRST PAGE")
+                || line.starts_with("STANDARD OUTPUT LOG")
+                || line.ends_with(':')
+            {
+                cr.select_font_face("Sans", FontSlant::Normal, FontWeight::Bold);
+                cr.set_font_size(font_size + 1.0);
+                cr.set_source_rgb(0.0, 0.2, 0.6);
+            } else if line.starts_with("  •") {
+                cr.select_font_face("Sans", FontSlant::Normal, FontWeight::Bold);
+                cr.set_font_size(font_size);
+                cr.set_source_rgb(0.1, 0.1, 0.1);
+            } else {
+                cr.select_font_face("Monospace", FontSlant::Normal, FontWeight::Normal);
+                cr.set_font_size(font_size);
+                cr.set_source_rgb(0.0, 0.0, 0.0);
+            }
+        };
+
+        let sublines = wrap_line(cr, line, max_text_width);
+        for subline in sublines {
+            if current_y > max_y {
+                cr.show_page().unwrap();
+                prepare_page(cr);
+                current_y = margin_y + font_size;
+            }
+
+            apply_style(cr, &subline);
+
+            cr.move_to(margin_x, current_y);
+            cr.show_text(&subline).unwrap();
+            current_y += line_height;
+        }
     }
 }
 
@@ -49,15 +136,17 @@ pub fn compute_perimeter(poly: &[Point2D]) -> f64 {
     crate::geom::euclidean_length(poly)
 }
 
-/// Renders the optimal polygon, the estimated circle-like boundaries, and the grid points.
+/// Renders the optimal polygon, estimated circle-like boundaries, grid points,
+/// and multi-page execution log summary on subsequent pages.
 pub fn draw_polygon_with_grid(
     dir_pdfs: &str,
     poly: &[Point2D],
     poly_circ: &[Point2D],
     poly_circ_exp: &[Point2D],
     k: usize,
-    ub_circle: f64,
+    _ub_circle: f64,
     good: &GridSet,
+    stdout_info: &str,
 ) {
     let filename: String = format!("{}/{:06}.pdf", dir_pdfs, k);
     let (min_x, max_x, _, max_y) = bound(&[poly, poly_circ, poly_circ_exp], 10);
@@ -80,22 +169,27 @@ pub fn draw_polygon_with_grid(
     let surface = PdfSurface::new((width).round(), (height).round(), filename.clone()).unwrap();
     let cr = Context::new(&surface).unwrap();
 
+    // Fill Page 1 background with solid white
+    cr.set_source_rgb(1.0, 1.0, 1.0);
+    cr.rectangle(0.0, 0.0, width, height);
+    cr.fill().unwrap();
+
     let trans_poly: Vec<(f64, f64)> = poly.iter().map(|&p| translate(p)).collect();
     let trans_poly_circ: Vec<(f64, f64)> = poly_circ.iter().map(|&p| translate(p)).collect();
     let trans_poly_circ_exp: Vec<(f64, f64)> =
         poly_circ_exp.iter().map(|&p| translate(p)).collect();
 
-    // Draw the optimal polygon.
-    cr.set_line_width(2.0);
-    cr.set_source_rgb(0.2, 0.5, 0.8);
-    draw_polygon(&cr, &trans_poly, (0.2, 0.5, 0.8, 1.0));
-
-    // Draw the circle-like estimated bounds.
+    // Draw the circle-like estimated bounds first.
     cr.set_line_width(1.0);
-    cr.set_source_rgb(0.9, 0.5, 0.8);
-    draw_polygon(&cr, &trans_poly_circ, (0.9, 0.5, 0.2, 0.01));
     cr.set_source_rgb(0.1, 1.0, 0.1);
     draw_polygon(&cr, &trans_poly_circ_exp, (0.1, 0.9, 0.1, 0.1));
+    cr.set_source_rgb(0.9, 0.5, 0.8);
+    draw_polygon(&cr, &trans_poly_circ, (0.9, 0.5, 0.2, 0.01));
+
+    // Draw the optimal polygon with black boundary (width 1.0) and blue fill.
+    cr.set_line_width(1.0);
+    cr.set_source_rgb(0.0, 0.0, 0.0);
+    draw_polygon(&cr, &trans_poly, (0.2, 0.5, 0.8, 1.0));
 
     let rad: f64 = width / (20.0 * (max_x as f64));
     // Draw the grid points, color-coded by their status (origin, good, bad).
@@ -121,15 +215,52 @@ pub fn draw_polygon_with_grid(
         }
     }
 
+    // End Page 1 (Figure)
     cr.show_page().unwrap();
 
-    let str_main = format!("k = {}\nCircle ub on perimeter: {:.4}\n", k, ub_circle);
-    let str_b = format!(
-        "solution perimeter: {:.4}\n# vertices: {}\n",
-        compute_perimeter(poly),
-        poly.len()
+    let text_page_w = width.max(600.0);
+    let text_page_h = height.max(750.0);
+    surface.set_size(text_page_w, text_page_h).unwrap();
+
+    // Construct full text info for Page 2 and subsequent pages
+    let full_info = format!(
+r#"================================================================================
+FIRST PAGE COLOR & POLYGON EXPLANATION
+================================================================================
+
+Polygons:
+  • Blue Polygon with Black Boundary (line width 1.0):
+    Optimal Solution Polygon — Minimum Euclidean perimeter polygon enclosing
+    exactly k={} grid points found by the DP solver.
+
+  • Red/Orange Outlined Polygon (line width 1.0):
+    Baseline Disk Polygon (ch_m) — Convex hull of ~k points around origin
+    shifted by delta, providing the baseline geometric estimate.
+
+  • Green Outlined Polygon (line width 1.0):
+    Expanded Disk Polygon (ch_m_exp) — Convex hull of expanded disk estimate,
+    defining outer search boundary for grid partitioning.
+
+Grid Points (Dots):
+  • Yellow Dot:
+    Origin (0,0) — Reference origin point for Pick's Theorem & DP search.
+
+  • Blue Dots:
+    Good Grid Points — Points within search width l of estimated boundary;
+    these form candidate vertices in the visibility graph.
+
+  • Red Dots:
+    Interior / Exterior Points — Points excluded from candidate vertices
+    (interior bad-set points deep inside or exterior points outside search set).
+
+================================================================================
+STANDARD OUTPUT LOG
+================================================================================
+{}"#,
+        k, stdout_info
     );
-    cr_string_pdf(&cr, width, height, &format!("{}{}", str_main, str_b));
+
+    render_text_pages(&cr, text_page_w, text_page_h, &full_info);
 
     surface.finish();
     println!("Polygon saved to {}", filename);

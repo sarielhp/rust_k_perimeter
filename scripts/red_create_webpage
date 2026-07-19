@@ -14,6 +14,7 @@ echo "4. rsyncing to valis"
 
 RBASE=/home/sariel/prog/26/k_perimeter/v3_branch
 VDIR=/home/sariel/html/research/26/k_perimeter
+URL="https://sarielhp.org/research/26/k_perimeter/html"
 
 rsync -auvr tred:$RBASE/output/ tvalis:$VDIR
 #md -p $vDIR/csv/ >& /dev/null
@@ -25,3 +26,7 @@ echo "5. Rebuilding the webpage itself"
 ssh tvalis "cd $VDIR; scripts/generate_webpage"
 
 echo "6. done"
+
+echo ""
+echo "URL: $URL"
+echo ""

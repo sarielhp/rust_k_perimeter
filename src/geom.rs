@@ -278,25 +278,35 @@ pub fn is_point_on_segment(a: Point2D, b: Point2D, c: Point2D) -> bool {
     b.x >= min_x && b.x <= max_x && b.y >= min_y && b.y <= max_y
 }
 
-/// Simplifies a polygon by removing vertices that are collinear with their adjacent neighbors.
+/// Simplifies a polygon by removing vertices that lie in the middle of edges.
+/// Repeatedly removes redundant collinear vertices until all remaining vertices are real vertices.
 pub fn polygon_rm_redundant_vertices(poly: &[Point2D]) -> Vec<Point2D> {
-    let n = poly.len();
-    if n <= 2 {
-        return poly.to_vec();
-    }
-    let mut out = Vec::with_capacity(n);
-    for i in 0..n {
-        let prev = poly[(i + n - 1) % n];
-        let cur = poly[i];
-        let next = poly[(i + 1) % n];
-        if !is_point_on_segment(prev, cur, next) {
-            out.push(cur);
+    let mut current = poly.to_vec();
+    loop {
+        let n = current.len();
+        if n <= 2 {
+            return current;
         }
+        let mut out = Vec::with_capacity(n);
+        for i in 0..n {
+            let prev = current[(i + n - 1) % n];
+            let cur = current[i];
+            let next = current[(i + 1) % n];
+            if !is_point_on_segment(prev, cur, next) {
+                out.push(cur);
+            }
+        }
+        if out.len() == n {
+            return out;
+        }
+        if out.is_empty() {
+            if !poly.is_empty() {
+                out.push(poly[0]);
+            }
+            return out;
+        }
+        current = out;
     }
-    if out.is_empty() && !poly.is_empty() {
-        out.push(poly[0]);
-    }
-    out
 }
 
 /// Approximates a disk of ~k grid points around origin.
@@ -801,4 +811,49 @@ pub fn compute_max_turn_angle(poly: &[Point2D]) -> f64 {
         }
     }
     max_angle
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_polygon_rm_redundant_vertices_single_pass() {
+        let poly = vec![
+            Point2D::new(0, 0),
+            Point2D::new(1, 0),
+            Point2D::new(2, 0),
+            Point2D::new(2, 2),
+            Point2D::new(0, 2),
+        ];
+        let cleaned = polygon_rm_redundant_vertices(&poly);
+        let expected = vec![
+            Point2D::new(0, 0),
+            Point2D::new(2, 0),
+            Point2D::new(2, 2),
+            Point2D::new(0, 2),
+        ];
+        assert_eq!(cleaned, expected);
+    }
+
+    #[test]
+    fn test_polygon_rm_redundant_vertices_multi_pass() {
+        let poly = vec![
+            Point2D::new(0, 0),
+            Point2D::new(1, 0),
+            Point2D::new(2, 0),
+            Point2D::new(3, 0),
+            Point2D::new(4, 0),
+            Point2D::new(4, 2),
+            Point2D::new(0, 2),
+        ];
+        let cleaned = polygon_rm_redundant_vertices(&poly);
+        let expected = vec![
+            Point2D::new(0, 0),
+            Point2D::new(4, 0),
+            Point2D::new(4, 2),
+            Point2D::new(0, 2),
+        ];
+        assert_eq!(cleaned, expected);
+    }
 }

@@ -195,16 +195,16 @@ pub fn build_visibility_graph(
         }
     }
 
-    println!("   Edge constructed. Now sorting edges and precalculating ranges...");
-    println!("   elaped time: {}", start_vg.elapsed().as_secs_f64());
+    crate::log_println!("   Edge constructed. Now sorting edges and precalculating ranges...");
+    crate::log_println!("   elaped time: {}", start_vg.elapsed().as_secs_f64());
     // Sort edges CCW to enable efficient range lookups during DP.
     for i in 0..n {
         let u = good.points[i];
         sort_adjacency_list_edges(good, u, &mut adjacency_list[i]);
     }
 
-    println!("   Now calculating in/out ranges for edges...");
-    println!("   elaped time: {}", start_vg.elapsed().as_secs_f64());
+    crate::log_println!("   Now calculating in/out ranges for edges...");
+    crate::log_println!("   elaped time: {}", start_vg.elapsed().as_secs_f64());
     // Precalculate suffix ranges: for each edge (u,v), find the range of edges (v,w)
     // that are convex relative to (u,v) and within the turn angle limit.
     for i in 0..n {
@@ -232,7 +232,7 @@ pub fn build_visibility_graph(
             adjacency_list[i][j].next_edge_end_idx = end_idx;
         }
     }
-    println!(
+    crate::log_println!(
         "   Total build_visibility_graph took: {:?}",
         start_vg.elapsed()
     );

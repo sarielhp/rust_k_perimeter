@@ -134,7 +134,7 @@ pub struct DPContext<'a> {
 fn print_info(ctx: &DPContext, l_i: u32) {
     let used_bytes = ctx.dp_vals.len() * std::mem::size_of::<DPStateValue>();
     let used_mb = used_bytes / 1_048_576;
-    println!(
+    crate::log_println!(
         "k: {} c: {:>12}  {:3}%  dpA: {:>6}MB  hash: {}  {:.2}s",
         ctx.k,
         (*ctx.conf_count).to_formatted_string(&Locale::en),
@@ -419,7 +419,7 @@ pub fn minimize_perimeter_dp(
         ctx.best_sol_idx.is_some(),
         "No solution found by DP solver. This should never happen since the origin itself is a valid solution."
     );
-    println!("# of configurations generated: {}", *ctx.conf_count);
+    crate::log_println!("# of configurations generated: {}", *ctx.conf_count);
     let sol = extract_solution(&ctx.dp_vals, ctx.best_sol_idx.unwrap(), ctx.good);
     Ok((sol, ub_circle, *ctx.conf_count))
 }
