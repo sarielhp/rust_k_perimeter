@@ -192,7 +192,7 @@ pub fn draw_polygon_with_grid(
     draw_polygon(&cr, &trans_poly_circ_exp, (0.1, 0.9, 0.1, 0.1));
 
     let rad: f64 = width / (20.0 * (max_x as f64));
-    // Draw the grid points, color-coded by their status (origin, good, bad).
+    // Draw grid points: yellow origin, blue good points, and filtered red points.
     for x in min_x..=max_x {
         for y in min_y..=max_y {
             let p = Point2D::new(x as CoordType, y as CoordType);
@@ -207,8 +207,33 @@ pub fn draw_polygon_with_grid(
             }
             // Search set
             else {
+                // Red point: draw only if distance <= 5 to a non-red point or grid boundary
+                let near_grid_boundary = (x - min_x) <= 5
+                    || (max_x - x) <= 5
+                    || (y - min_y) <= 5
+                    || (max_y - y) <= 5;
+
+                let mut near_non_red = false;
+                if !near_grid_boundary {
+                    'search: for dx in -5..=5 {
+                        for dy in -5..=5 {
+                            if dx * dx + dy * dy <= 25 {
+                                let q = Point2D::new(p.x + dx as CoordType, p.y + dy as CoordType);
+                                if (q.x == 0 && q.y == 0) || good.contains(&q) {
+                                    near_non_red = true;
+                                    break 'search;
+                                }
+                            }
+                        }
+                    }
+                }
+
+                if !(near_grid_boundary || near_non_red) {
+                    continue;
+                }
+
                 cr.set_source_rgb(0.8, 0.0, 0.0);
-            } // Interior/Exterior
+            } // Filtered Interior/Exterior
 
             cr.arc(tx, ty, rad, 0.0, 2.0 * std::f64::consts::PI);
             cr.fill().unwrap();
