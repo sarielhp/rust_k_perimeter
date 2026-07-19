@@ -419,7 +419,6 @@ pub fn minimize_perimeter_dp(
         ctx.best_sol_idx.is_some(),
         "No solution found by DP solver. This should never happen since the origin itself is a valid solution."
     );
-    crate::log_println!("# of configurations generated: {}", *ctx.conf_count);
     let sol = extract_solution(&ctx.dp_vals, ctx.best_sol_idx.unwrap(), ctx.good);
     Ok((sol, ub_circle, *ctx.conf_count))
 }
