@@ -19,4 +19,4 @@ All notable changes to this project will be documented in this file.
 ### Changed
 - **Optimal Polygon Styling**: Optimal solution polygon boundary is now rendered in black with a line width of `1.0` (previously blue with width `2.0`).
 - **Rendering Order**: Polygons are now drawn before grid points, ensuring grid dots are drawn cleanly on top of all polygon boundaries.
-- **Polygon Simplification**: Enhanced `polygon_rm_redundant_vertices` in `geom.rs` to iteratively clean redundant collinear vertices from simplified polygons.
+- **Cleaned-up Polygon Storage & Analysis**: Ensured that the polygon stored in `output/polys/`, evaluated in Pick's Theorem verification, measured for perimeter/area/vertices, and drawn in PDFs is explicitly the cleaned-up polygon (`sol_c`) with all redundant collinear vertices removed via `polygon_rm_redundant_vertices`.
