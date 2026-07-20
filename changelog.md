@@ -15,6 +15,7 @@ All notable changes to this project will be documented in this file.
   - **Red Dots**: Interior ("bad set") and exterior grid points.
 - **Stdout Logger (`logger.rs`)**: Introduced a global log collector module (`logger.rs` and `log_println!` macro) to capture standard output during execution for PDF generation.
 - **Comma-Separated Integer Formatting**: All integer metrics and progress counts printed to standard output and rendered in PDF info pages (such as `k`, `vertices`, `boundary grid points`, `Configs computed`, and `UB primitive edge len`) are now formatted with commas (e.g. `1,633,661` and `10,000`) for enhanced readability.
+- **System Hardware & OS Info (`sys_info.rs`)**: System metadata (`# CPU Model`, `# Total Memory`, and `# Operating System`) is now dynamically gathered and included in the `#` summary section printed to standard output, exported `.txt` files, and rendered in the PDF info section.
 - **Multi-page Pagination**: Dynamic page creation and text wrapping in Cairo (`render_text_pages`) to ensure log output flowing across multiple pages is not truncated.
 
 ### Changed

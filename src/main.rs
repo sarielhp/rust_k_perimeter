@@ -16,6 +16,7 @@ mod kd_tree;
 mod logger;
 mod point;
 mod polygon;
+mod sys_info;
 mod v_graph;
 
 use dp::{max_edge_length, minimize_perimeter_dp};
@@ -243,6 +244,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     log_and_print("DP duration", &dp_duration.as_secs_f64())?;
     log_and_print("Running time in seconds", &rt)?;
+    log_and_print("CPU Model", &sys_info::get_cpu_model())?;
+    log_and_print("Total Memory", &sys_info::get_total_memory())?;
+    log_and_print("Operating System", &sys_info::get_operating_system())?;
 
     // Draw PDF with page 1 figure and page 2+ color explanations and standard output log.
     draw_polygon_with_grid(
