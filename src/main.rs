@@ -38,6 +38,7 @@ use crate::geom::{
 };
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
+    let start_time_str = sys_info::get_formatted_now();
     assert!(
         std::mem::size_of::<usize>() >= 8,
         "This program requires a 64-bit architecture (usize must be at least 64 bits)."
@@ -244,6 +245,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     log_and_print("DP duration", &dp_duration.as_secs_f64())?;
     log_and_print("Running time in seconds", &rt)?;
+    log_and_print("Start Time", &start_time_str)?;
+    log_and_print("Hostname", &sys_info::get_hostname())?;
     log_and_print("CPU Model", &sys_info::get_cpu_model())?;
     log_and_print("Total Memory", &sys_info::get_total_memory())?;
     log_and_print("Operating System", &sys_info::get_operating_system())?;

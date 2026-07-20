@@ -72,6 +72,28 @@ pub fn get_operating_system() -> String {
     format!("{} ({})", name, std::env::consts::ARCH)
 }
 
+/// Returns the machine hostname (e.g. "red").
+pub fn get_hostname() -> String {
+    if let Ok(hostname) = fs::read_to_string("/proc/sys/kernel/hostname") {
+        let trimmed = hostname.trim();
+        if !trimmed.is_empty() {
+            return trimmed.to_string();
+        }
+    }
+    if let Ok(hostname) = fs::read_to_string("/etc/hostname") {
+        let trimmed = hostname.trim();
+        if !trimmed.is_empty() {
+            return trimmed.to_string();
+        }
+    }
+    std::env::var("HOSTNAME").unwrap_or_else(|_| "Unknown".to_string())
+}
+
+/// Returns the formatted date and time of program start execution (e.g. "2026-07-19 20:56:14 -05:00").
+pub fn get_formatted_now() -> String {
+    chrono::Local::now().format("%Y-%m-%d %H:%M:%S %z").to_string()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
